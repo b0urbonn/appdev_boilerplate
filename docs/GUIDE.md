@@ -22,14 +22,14 @@ An Android app built with **React Native + Expo** that already has:
 | One AI chat screen (streaming replies, retry, stop) | `src/app/(tabs)/chat.tsx` |
 | Context ring that shows how much the AI still remembers | `src/components/ContextRing.tsx` |
 | System settings (nickname, light/dark theme, backup/restore, about, reset all data) | `src/app/settings.tsx` |
-| Chatbot settings (AI provider, API key, model, local model) | `src/app/chat-settings.tsx` |
+| Chatbot settings (AI provider, API key, model, local model, saved system prompt) | `src/app/chat-settings.tsx` |
 | Offline storage (SQLite database on the phone) | `src/db/` |
 | Cloud AI: Google Gemini (free API key) | `src/ai/gemini.ts` |
 | Local AI: Gemma 4 E2B running on the phone, no internet | `src/ai/local.ts` |
 
 **Offline-first** means the app saves everything on the device. It works
-without internet; only Gemini replies and the one-time local model download
-need a connection.
+without internet; Gemini replies and the initial local-model download need a connection. Image
+and voice attachments can be sent to either provider.
 
 ---
 
@@ -63,8 +63,10 @@ servers with **EAS Build** (section 6.2).
 
 - **A real Android phone with an ARM processor** (almost every phone is ARM).
 - Android **8.0 (API 26) or newer**.
-- For **local AI**: **6–8 GB RAM** recommended (4 GB minimum) and
-  **about 3 GB free storage** for the model.
+- For **local AI**: **6–8 GB RAM** is recommended and **about 3 GB free
+  storage** for the model. Compatibility is estimated from the phone’s total
+  physical RAM. Available RAM is displayed live, but operating-system or
+  native-engine allocation limits can still affect loading.
 - The phone and your computer on the **same Wi-Fi** while developing.
 
 > Android **emulators** on Windows/Intel PCs (x86_64) **cannot run local AI**.
@@ -239,7 +241,7 @@ name later means a new app on the phone.
 | npm name | `package.json` > `name` | `"my-study-buddy"` |
 | App icon/splash | `assets/images/` | Replace `icon.png`, `android-icon-*.png`, `splash-icon.png` (keep sizes) |
 | Colours | `src/theme.ts` | Change `tint` and the other colours for light/dark |
-| Title in README | `README.md` | Your project name and description |
+| Title in README | `../README.md` | Your project name and description |
 | License | `LICENSE` | Replace with your own (it is still Expo's template license) |
 
 Then link the project to **your** Expo account (adds a `projectId` to
@@ -389,8 +391,10 @@ Skip this unless you want unlimited builds on your own PC.
 3. Tap **Load model**. Wait until it says it's loaded.
 4. Chat, now fully offline. **Unload** frees memory; **Delete** frees
    storage.
-5. If loading fails or the app closes, close other apps and keep the
-   backend on **CPU**. **GPU** can be faster on some phones.
+5. The app checks device hardware and uses total RAM for its compatibility
+   estimate. Select an available backend in Chat settings; CPU is the broadest
+   compatibility option, while GPU or NPU may accelerate supported operations.
+   A runtime allocation can still fail even when the total-RAM estimate passes.
 
 ### 7.3 Context ring
 
@@ -436,8 +440,9 @@ This deletes everything (chat, settings, API key, local model).
 
 ### 8.3 Change how the AI behaves
 
-- **Personality/instructions**: Chat settings > **System prompt**, or the
-  default in `src/settings/storage.ts` (`buildSystemPrompt()`).
+- **Personality/instructions**: edit the system prompt in Chat settings and
+  press **Save**. The default is in `src/settings/storage.ts`
+  (`buildSystemPrompt()`).
 - **Use the AI in your own screen**: use `getProvider(settings)` from
   `src/ai/index.ts`; see how `src/app/(tabs)/chat.tsx` calls `generate()`.
 - **Add another AI provider**: implement `ChatProvider` from
@@ -483,7 +488,8 @@ src/hooks/               useNetwork, useAiStatus
 src/theme.ts             Colours
 ```
 
-More technical details are in [README.md](README.md).
+See the [documentation index](README.md) for the architecture, local model,
+cloud routing, and native hardware notes.
 
 ---
 
@@ -496,7 +502,7 @@ More technical details are in [README.md](README.md).
 - [ ] Renamed `name`, `slug`, `scheme` and **`android.package`** in `app.json`
 - [ ] Renamed `name` in `package.json`
 - [ ] Replaced icons/splash in `assets/images/` (optional but recommended)
-- [ ] Updated `README.md` and `LICENSE`
+- [ ] Updated the root [README](../README.md) and `LICENSE`
 - [ ] App runs in the browser: `npx expo start --web`
 - [ ] Created a Gemini API key and tested a chat
 - [ ] (Android) Expo account created, `eas-cli` installed, `eas login` done
@@ -548,11 +554,12 @@ project.
 | *(Android Studio only)* `SDK location not found` | Set `ANDROID_HOME` (section 6.3) and open a new terminal. |
 | *(Android Studio only)* `adb devices` shows nothing | Use a data cable, enable USB debugging, accept the prompt on the phone. |
 | Port 8081 already in use | Close the other `expo start` terminal, or run `npx expo start --port 8082`. |
+| Chat controls are hidden by the keyboard | Update `softwareKeyboardLayoutMode` in `app.json`; the chat uses keyboard avoidance and keeps its composer in one row. Rebuild the Android development client after changing native config. |
 | App opens in Expo Go and crashes | Expo Go isn't supported. Use your development build (section 6.2). |
 | Blank screen / stale code in browser | Stop the server and run `npx expo start --web --clear`. |
 | "Invalid API key" | Re-paste the key in Chat settings; set model to **Auto**. |
 | "Rate limit reached" | Free-tier limit; wait a minute and retry. |
 | Local AI unavailable in browser | Expected. Local AI only works in the Android app. |
-| Local model won't load / app closes | Not enough RAM. Close other apps, use **CPU**, or use Gemini instead. |
+| Local model won't load / app closes | Check the total-RAM compatibility status, confirm the model finished downloading and retry with **Auto** or **CPU**. A runtime memory allocation can still fail. |
 | Local AI on emulator fails | Emulators on x86 PCs aren't supported. Use a real phone. |
 | Want a clean start | Home > gear > **Reset all data**. |
