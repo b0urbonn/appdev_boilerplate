@@ -20,6 +20,7 @@ export function isModelLoaded(): boolean { return false; }
 export async function refreshModelStatus(): Promise<ModelStatus> { return status; }
 export async function downloadModel(): Promise<void> { throw unavailable(); }
 export async function cancelDownload(): Promise<void> {}
+export async function pauseDownload(): Promise<void> {}
 export async function deleteModel(): Promise<void> {}
 export async function loadLocalModel(_backend: LocalBackend, _systemPrompt?: string): Promise<void> {
   throw unavailable();

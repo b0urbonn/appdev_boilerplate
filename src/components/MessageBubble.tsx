@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Animated, Image, StyleSheet, Text, View } from 'react-native';
+import { useReduceMotion } from '@/components/AccessibilityPreferences';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import type { MessageRow } from '../db/messages';
 import { useTheme } from '../theme';
 import { AudioChip } from './AudioChip';
@@ -16,25 +18,46 @@ interface Props {
 
 export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
   const theme = useTheme();
+  const reduceMotion = useReduceMotion();
   const isUser = message.role === 'user';
   const retryable = message.status === 'error' && !!onRetry;
+  const [entrance] = useState(() => new Animated.Value(0));
   const showPendingDots =
     message.status === 'pending' && message.content === '';
 
+  useEffect(() => {
+    if (reduceMotion) { entrance.setValue(1); return; }
+    entrance.setValue(0);
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [entrance, message.id, reduceMotion]);
+
   return (
-    <View
+    <Animated.View
       style={[
         styles.row,
         isUser ? styles.rowUser : styles.rowAssistant,
+        {
+          opacity: entrance,
+          transform: [
+            { translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) },
+          ],
+        },
       ]}
     >
       {!isUser && (
-        <View style={[styles.avatar, { backgroundColor: theme.tint }]}>
+        <View style={[styles.avatar, { backgroundColor: theme.buttonPrimary }]}>
           <Ionicons name="sparkles" size={14} color="#FFF" />
         </View>
       )}
       <View style={[styles.bubbleCol, isUser && styles.colUser]}>
-        <Pressable
+        <SmoothPressable
+          accessible={retryable}
+          accessibilityRole={retryable ? 'button' : 'none'}
+          accessibilityLabel={retryable ? 'Retry failed message' : undefined}
           disabled={!retryable}
           onPress={() => onRetry?.(message)}
           style={[
@@ -106,16 +129,14 @@ export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
                 </Text>
               </View>
               {retryable && (
-                <View style={styles.errorRow}>
-                  <Ionicons name="refresh" size={14} color={theme.tint} />
-                  <Text style={[styles.errorText, { color: theme.tint }]}>
-                    Retry
-                  </Text>
+                <View style={[styles.retry, { backgroundColor: theme.buttonPrimary }]}>
+                  <Ionicons name="refresh" size={14} color="#FFFFFF" />
+                  <Text style={[styles.errorText, { color: '#FFFFFF', fontWeight: '600' }]}>Retry</Text>
                 </View>
               )}
             </View>
           )}
-        </Pressable>
+        </SmoothPressable>
         {message.status !== 'pending' && (
           <Text style={[styles.time, { color: theme.textSecondary }]}>
             {new Date(message.created_at).toLocaleTimeString([], {
@@ -125,7 +146,7 @@ export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
           </Text>
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -154,6 +175,7 @@ const styles = StyleSheet.create({
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorBlock: { marginTop: 6, gap: 4 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  retry: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, borderRadius: 8, paddingHorizontal: 10, minHeight: 44, paddingVertical: 6 },
   errorText: { fontSize: 13, flexShrink: 1 },
   time: { fontSize: 11, marginTop: 4, marginHorizontal: 4 },
 });

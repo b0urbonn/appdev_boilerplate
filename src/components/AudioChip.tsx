@@ -2,7 +2,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import { useTheme } from '../theme';
 
 const mmss = (seconds: number) =>
@@ -12,7 +13,7 @@ export function AudioChip({ uri, isUser }: { uri: string; isUser: boolean }) {
   const theme = useTheme();
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
-  const color = isUser ? '#FFF' : theme.text;
+  const color = isUser ? '#FFFFFF' : theme.textSecondary;
 
   const toggle = () => {
     if (status.playing) {
@@ -31,21 +32,21 @@ export function AudioChip({ uri, isUser }: { uri: string; isUser: boolean }) {
 
   return (
     <View style={styles.row}>
-      <Pressable
+      <SmoothPressable
         onPress={toggle}
         accessibilityRole="button"
         accessibilityLabel={
           status.playing ? 'Pause voice message' : 'Play voice message'
         }
-        hitSlop={6}
-        style={[styles.button, { borderColor: color }]}
+        hitSlop={10}
+        style={[styles.button, { backgroundColor: isUser ? '#004A99' : theme.buttonPrimary }]}
       >
         <Ionicons
           name={status.playing ? 'pause' : 'play'}
           size={14}
-          color={color}
+          color="#FFFFFF"
         />
-      </Pressable>
+      </SmoothPressable>
       <Text style={[styles.time, { color }]}>{mmss(shown)}</Text>
     </View>
   );
@@ -57,7 +58,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

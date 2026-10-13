@@ -1,16 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Tabs } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, type Theme } from '@/theme';
+import { SmoothPressable } from '@/components/SmoothPressable';
+import { useTheme } from '@/theme';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 export const TAB_BAR_HEIGHT = 64;
 export const TAB_BAR_GAP = 12;
-const INACTIVE = '#8E8E93';
 /** This route gets its own round button next to the pill. */
 const SEPARATE_ROUTE = 'chat';
 
@@ -37,62 +37,63 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
   const icon = (route: (typeof state.routes)[number], focused: boolean, size: number) =>
     descriptors[route.key].options.tabBarIcon?.({
       focused,
-      color: focused ? theme.tint : INACTIVE,
+      color: focused ? '#FFFFFF' : theme.textSecondary,
       size,
     });
 
   const separate = state.routes.find((r) => r.name === SEPARATE_ROUTE);
   const separateFocused = state.routes[state.index]?.name === SEPARATE_ROUTE;
 
+  if (separateFocused) return null;
+
   return (
     <View
       pointerEvents="box-none"
       style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }]}
     >
-      <View style={[styles.pill, surface(theme)]}>
+      <View style={[styles.pill, { backgroundColor: theme.card, borderColor: theme.border }]}>
         {state.routes
           .filter((r) => r.name !== SEPARATE_ROUTE)
           .map((route) => {
             const focused = state.routes[state.index]?.key === route.key;
             const { title } = descriptors[route.key].options;
             return (
-              <Pressable
+              <SmoothPressable
                 key={route.key}
                 onPress={() => go(route, focused)}
+                accessibilityLabel={title ?? route.name}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: focused }}
-                style={styles.item}
+                style={[styles.item, focused ? { backgroundColor: theme.buttonPrimary, borderRadius: TAB_BAR_HEIGHT / 2 } : undefined]}
               >
                 {icon(route, focused, 25)}
-                <Text style={[styles.label, { color: focused ? theme.tint : INACTIVE }]}>
+                <Text style={[styles.label, { color: focused ? '#FFFFFF' : theme.textSecondary }]}>
                   {title ?? route.name}
                 </Text>
-              </Pressable>
+              </SmoothPressable>
             );
           })}
         {PLACEHOLDER_TABS.map((t, i) => (
-          <View key={i} style={[styles.item, styles.placeholder]}>
-            <Ionicons name={t.icon} size={25} color={INACTIVE} />
-            <Text style={[styles.label, { color: INACTIVE }]}>{t.label}</Text>
+          <View key={i} accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.item, styles.placeholder]}>
+            <Ionicons name={t.icon} size={25} color={theme.textSecondary} />
+            <Text style={[styles.label, { color: theme.textSecondary }]}>{t.label}</Text>
           </View>
         ))}
       </View>
       {separate && (
-        <Pressable
+        <SmoothPressable
           onPress={() => go(separate, separateFocused)}
           accessibilityRole="tab"
           accessibilityLabel={descriptors[separate.key].options.title ?? separate.name}
           accessibilityState={{ selected: separateFocused }}
-          style={[styles.circle, surface(theme)]}
+          style={[styles.circle, { backgroundColor: separateFocused ? theme.buttonPrimary : theme.card, borderColor: separateFocused ? theme.buttonPrimary : theme.border }]}
         >
           {icon(separate, separateFocused, 27)}
-        </Pressable>
+        </SmoothPressable>
       )}
     </View>
   );
 }
-
-const surface = (theme: Theme) => ({ backgroundColor: theme.card, borderColor: theme.border });
 
 const styles = StyleSheet.create({
   wrap: {
@@ -122,17 +123,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     ...shadow(),
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  placeholder: { opacity: 0.5 },
-  label: { fontSize: 10, fontWeight: '500' },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, marginVertical: 4 },
+  placeholder: { opacity: 1 },
+  label: { fontSize: 12, fontWeight: '500' },
 });
 
 function shadow() {
   return {
     shadowColor: '#000',
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.06,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    elevation: 3,
   };
 }

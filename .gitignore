@@ -42,5 +42,10 @@ example
 /ios
 /android
 
+# Local Expo module build output
+modules/**/android/build/
+modules/**/android/.cxx/
+modules/**/android/.gradle/
+
 # env files
 .env

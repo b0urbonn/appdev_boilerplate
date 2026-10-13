@@ -3,9 +3,9 @@ export type ChatRole = 'user' | 'assistant';
 export interface ChatMessage {
   role: ChatRole;
   content: string;
-  /** Local file URI of an attached image (cloud provider only). */
+  /** Local file URI of an attached image (local or cloud provider). */
   imageUri?: string;
-  /** Local file URI of a voice-message recording (cloud provider only). */
+  /** Local file URI of a voice-message recording (local or cloud provider). */
   audioUri?: string;
 }
 
@@ -24,6 +24,8 @@ export interface GenerateOptions {
   /** Called once per streamed token/chunk. */
   onToken: (t: string) => void;
   conversationId: string;
+  /** Clear a failed streamed attempt before an automatic local retry. */
+  onReset?: () => void;
   /** Called after a reply with the provider's real token usage, if known. */
   onContext?: (usage: ContextUsage) => void;
   /** Called with the model that answered once the response starts (cloud). */

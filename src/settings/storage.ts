@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 export type ProviderId = 'cloud' | 'local';
-export type LocalBackend = 'auto' | 'gpu' | 'cpu';
+export type LocalBackend = 'auto' | 'npu' | 'gpu' | 'cpu';
 export type ThemeMode = 'light' | 'dark';
 
 const KEYS = {
@@ -64,7 +64,9 @@ export async function loadSettings(): Promise<Settings> {
     geminiApiKey: apiKey ?? '',
     geminiModel: geminiModel || DEFAULT_GEMINI_MODEL,
     localBackend:
-      localBackend === 'gpu' || localBackend === 'cpu' ? localBackend : 'auto',
+      localBackend === 'npu' || localBackend === 'gpu' || localBackend === 'cpu'
+        ? localBackend
+        : 'auto',
     systemPrompt: systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
     nickname: nickname ?? '',
     onboarded: onboarded === 'true',

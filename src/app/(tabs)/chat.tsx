@@ -9,11 +9,12 @@ import React, {
 } from 'react';
 import {
   FlatList,
-  Pressable,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProvider } from '@/ai';
 import {
   LOCAL_CONTEXT_TOKENS,
@@ -24,6 +25,8 @@ import { pickImage } from '@/attachments/files';
 import { Banner } from '@/components/Banner';
 import { ChatInput } from '@/components/ChatInput';
 import { ContextRing } from '@/components/ContextRing';
+import { IconButton } from '@/components/Button';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import { MessageBubble } from '@/components/MessageBubble';
 import {
   clearAllConversations,
@@ -45,7 +48,7 @@ import {
 import { useSettings } from '@/settings/SettingsContext';
 import { buildSystemPrompt } from '@/settings/storage';
 import { useTheme } from '@/theme';
-import { confirmAction } from '@/utils/confirm';
+import { confirmAction, showMessage } from '@/utils/confirm';
 
 /** Streamed content is written to SQLite at most this often. */
 const DB_WRITE_THROTTLE_MS = 500;
@@ -63,6 +66,7 @@ export const SUGGESTIONS: { icon: IconName; label: string; prompt: string }[] = 
 ];
 
 export default function ChatScreen() {
+  const insets = useSafeAreaInsets();
   const theme = useTheme();
   const router = useRouter();
   const { settings, ready } = useSettings();
@@ -140,6 +144,14 @@ export default function ChatScreen() {
       setGenerating(true);
 
       let content = '';
+      let streamTimer: ReturnType<typeof setTimeout> | undefined;
+      const flushStream = () => {
+        if (streamTimer) clearTimeout(streamTimer);
+        streamTimer = undefined;
+        const snapshot = content;
+        setMessages(prev => prev.map(m => m.id === assistantRow.id ? { ...m, content: snapshot } : m));
+        persistContent(assistantRow.id, snapshot);
+      };
       try {
         await provider.generate(history, {
           systemPrompt: buildSystemPrompt(settings),
@@ -147,17 +159,20 @@ export default function ChatScreen() {
           conversationId: id,
           onContext: (usage) => setReported({ provider: provider.id, usage }),
           onModel: (m) => setLastModel(m),
+          onReset: () => {
+            if (streamTimer) clearTimeout(streamTimer);
+            streamTimer = undefined;
+            content = '';
+            setMessages(prev => prev.map(m => m.id === assistantRow.id ? { ...m, content: '' } : m));
+            persistContent(assistantRow.id, '', true);
+          },
           onToken: (t) => {
             content += t;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantRow.id ? { ...m, content } : m
-              )
-            );
-            persistContent(assistantRow.id, content);
+            if (!streamTimer) streamTimer = setTimeout(flushStream, 50);
           },
         });
       } catch (e) {
+        if (streamTimer) clearTimeout(streamTimer);
         if (!controller.signal.aborted) {
           const errText =
             e instanceof Error ? e.message : 'Generation failed.';
@@ -170,6 +185,7 @@ export default function ChatScreen() {
         // Aborted mid-flight: fall through and keep the partial content.
       }
 
+      if (streamTimer) clearTimeout(streamTimer);
       persistContent(assistantRow.id, content, true);
       await setMessageStatus(assistantRow.id, 'done');
       await updateMessageContent(assistantRow.id, content);
@@ -186,12 +202,12 @@ export default function ChatScreen() {
       const uri = await pickImage();
       if (uri) setPendingImage(uri);
     } catch (e) {
-      console.warn('Image pick failed:', e);
+      showMessage('Unable to attach image', e instanceof Error ? e.message : 'Please try again.');
     }
   }, []);
 
   const startRecording = useCallback(() => {
-    voice.start().catch((e) => console.warn('Recording failed:', e));
+    voice.start().catch((e) => showMessage('Unable to record', e instanceof Error ? e.message : 'Please try again.'));
   }, [voice]);
 
   const finishRecording = useCallback(async () => {
@@ -199,7 +215,7 @@ export default function ChatScreen() {
       const done = await voice.stop();
       if (done) setPendingAudio(done);
     } catch (e) {
-      console.warn('Recording failed:', e);
+      showMessage('Unable to save recording', e instanceof Error ? e.message : 'Please try again.');
     }
   }, [voice]);
 
@@ -225,9 +241,8 @@ export default function ChatScreen() {
     const image = pendingImage;
     const audio = pendingAudio;
     if ((!text && !image && !audio) || !provider || generating) return;
-    setInput('');
-    setPendingImage(null);
-    setPendingAudio(null);
+    setGenerating(true);
+    await ensureConversation(id);
 
     const userRow = await insertMessage({
       conversation_id: id,
@@ -249,6 +264,9 @@ export default function ChatScreen() {
       image_uri: null,
       audio_uri: null,
     });
+    setInput('');
+    setPendingImage(null);
+    setPendingAudio(null);
     setMessages((prev) => [...prev, userRow, assistantRow]);
 
     await touchConversation(id);
@@ -310,6 +328,7 @@ export default function ChatScreen() {
     confirmAction('Clear chat?', 'All messages will be deleted and the AI memory reset.', 'Clear', async () => {
       await clearAllConversations();
       await releaseLocalConversation(id);
+      await ensureConversation(id);
       // Reset only after the engine has released its memory.
       setMessages([]);
       setPendingImage(null);
@@ -359,7 +378,7 @@ export default function ChatScreen() {
       ? lastModel
         ? `Gemini · ${lastModel}`
         : 'Gemini · Cloud'
-      : 'Gemma 4 E2B · Local';
+      : 'Local AI';
   const modelLoading =
     problem === 'Loading the local model...' || modelStatus.state === 'loading';
   let statusColor = theme.danger;
@@ -373,44 +392,26 @@ export default function ChatScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.top} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <View style={[styles.topAvatar, { backgroundColor: theme.tint }]}>
-          <Ionicons name="sparkles" size={18} color="#FFF" />
-        </View>
+        <IconButton icon="chevron-back" label="Back to Home" onPress={() => router.navigate('/' as Href)} />
         <View style={styles.flex}>
           <Text style={[styles.title, { color: theme.text }]}>AI Chat</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+            <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 12 }}>
               {statusText}
             </Text>
           </View>
         </View>
         <ContextRing usage={context} theme={theme} />
-        <Pressable
-          onPress={clearChat}
-          accessibilityRole="button"
-          accessibilityLabel="Clear chat"
-          hitSlop={10}
-          disabled={generating || messages.length === 0}
-          style={(generating || messages.length === 0) && styles.disabled}
-        >
-          <Ionicons name="trash-outline" size={22} color={theme.text} />
-        </Pressable>
-        <Pressable
-          onPress={openSettings}
-          accessibilityRole="button"
-          accessibilityLabel="Chat settings"
-          hitSlop={10}
-        >
-          <Ionicons name="settings-outline" size={24} color={theme.text} />
-        </Pressable>
+        <IconButton icon="trash-outline" label="Clear chat" onPress={clearChat} disabled={generating || messages.length === 0} />
+        <IconButton icon="settings-outline" label="Chat settings" onPress={openSettings} />
       </View>
       {banner}
       {messages.length === 0 ? (
         <View style={styles.empty}>
-          <View style={[styles.emptyAvatar, { backgroundColor: theme.tint }]}>
+          <View style={[styles.emptyAvatar, { backgroundColor: theme.buttonPrimary }]}>
             <Ionicons name="sparkles" size={30} color="#FFF" />
           </View>
           <Text style={[styles.emptyTitle, { color: theme.text }]}>
@@ -421,27 +422,29 @@ export default function ChatScreen() {
           </Text>
           <View style={styles.chips}>
             {SUGGESTIONS.map((s) => (
-              <Pressable
+              <SmoothPressable
                 key={s.label}
                 disabled={problem !== null}
                 onPress={() => setInput(s.prompt)}
                 style={[
                   styles.chip,
-                  { backgroundColor: theme.card, borderColor: theme.border },
+                  { backgroundColor: theme.buttonSecondary, borderColor: theme.buttonSecondary },
                   problem !== null && styles.chipDisabled,
                 ]}
               >
-                <Ionicons name={s.icon} size={15} color={theme.tint} />
-                <Text style={{ color: theme.text, fontSize: 14 }}>
+                <Ionicons name={s.icon} size={18} color={theme.tint} />
+                <Text style={{ color: theme.text, fontSize: 14, fontWeight: '500' }}>
                   {s.label}
                 </Text>
-              </Pressable>
+              </SmoothPressable>
             ))}
           </View>
         </View>
       ) : (
         <FlatList
           inverted
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           data={[...messages].reverse()}
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.list}
@@ -457,22 +460,22 @@ export default function ChatScreen() {
       <ChatInput
         value={input}
         onChange={setInput}
-        onSend={send}
+        onSend={() => { void send().catch((error) => { setGenerating(false); showMessage('Unable to send message', error instanceof Error ? error.message : 'Please try again.'); }); }}
         onStop={stop}
         disabled={sendDisabled}
         generating={generating}
         imageUri={pendingImage}
-        onPickImage={provider?.id === 'cloud' ? attachImage : undefined}
+        onPickImage={provider ? attachImage : undefined}
         onRemoveImage={() => setPendingImage(null)}
         audio={pendingAudio}
         onRemoveAudio={() => setPendingAudio(null)}
         recording={voice.recording}
         recordingMs={voice.durationMs}
-        onStartRecording={provider?.id === 'cloud' ? startRecording : undefined}
+        onStartRecording={provider ? startRecording : undefined}
         onStopRecording={finishRecording}
         onCancelRecording={cancelRecording}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -482,17 +485,10 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  topAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -521,6 +517,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   chip: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -530,6 +527,5 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipDisabled: { opacity: 0.5 },
-  disabled: { opacity: 0.4 },
   list: { paddingVertical: 12 },
 });

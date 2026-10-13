@@ -1,3 +1,4 @@
+import { useReduceMotion } from './AccessibilityPreferences';
 import React, { useEffect, useState } from 'react';
 import { Animated, Platform, StyleSheet, View } from 'react-native';
 
@@ -6,9 +7,11 @@ export function TypingDots({ color }: { color: string }) {
   const [dots] = useState(() =>
     [0, 1, 2].map(() => new Animated.Value(0.3))
   );
+  const reduceMotion = useReduceMotion();
   const native = Platform.OS !== 'web';
 
   useEffect(() => {
+    if (reduceMotion) { dots.forEach((dot) => dot.setValue(0.7)); return; }
     const loop = Animated.loop(
       Animated.stagger(
         160,
@@ -30,7 +33,7 @@ export function TypingDots({ color }: { color: string }) {
     );
     loop.start();
     return () => loop.stop();
-  }, [dots, native]);
+  }, [dots, native, reduceMotion]);
 
   return (
     <View style={styles.row}>

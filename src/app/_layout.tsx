@@ -5,6 +5,9 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { getDb } from '@/db/client';
 import { refreshModelStatus } from '@/ai/local';
+import { DownloadStatusIndicator } from '@/components/DownloadStatusIndicator';
+import { PopupProvider } from '@/components/Popup';
+import { AccessibilityPreferences, useReduceMotion } from '@/components/AccessibilityPreferences';
 import { SettingsProvider, useSettings } from '@/settings/SettingsContext';
 import { useTheme } from '@/theme';
 
@@ -30,7 +33,7 @@ export default function RootLayout() {
 
   return (
     <SettingsProvider>
-      <RootNavigator />
+      <AccessibilityPreferences><PopupProvider><RootNavigator /></PopupProvider></AccessibilityPreferences>
     </SettingsProvider>
   );
 }
@@ -39,6 +42,7 @@ export default function RootLayout() {
 function RootNavigator() {
   const theme = useTheme();
   const { settings, ready } = useSettings();
+  const reduceMotion = useReduceMotion();
 
   // Keep the OS background colour (keyboard area, splash fade) in sync.
   useEffect(() => {
@@ -61,6 +65,7 @@ function RootNavigator() {
           headerStyle: { backgroundColor: theme.card },
           headerTintColor: theme.text,
           contentStyle: { backgroundColor: theme.background },
+          animation: reduceMotion ? 'none' : 'slide_from_right',
         }}
       >
         <Stack.Protected guard={!settings.onboarded}>
@@ -74,6 +79,7 @@ function RootNavigator() {
           <Stack.Screen name="terms" options={{ title: 'Terms & Conditions' }} />
         </Stack.Protected>
       </Stack>
+      <DownloadStatusIndicator />
     </>
   );
 }

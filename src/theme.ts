@@ -7,6 +7,9 @@ export interface Theme {
   textSecondary: string;
   border: string;
   tint: string;
+  buttonPrimary: string;
+  buttonSecondary: string;
+  buttonDanger: string;
   danger: string;
   success: string;
   warning: string;
@@ -22,11 +25,14 @@ const light: Theme = {
   text: '#111111',
   textSecondary: '#6B6B70',
   border: '#D8D8DE',
-  tint: '#208AEF',
-  danger: '#D32F2F',
+  tint: '#0066CC',
+  buttonPrimary: '#0066CC',
+  buttonSecondary: '#E6E8EE',
+  buttonDanger: '#BA2525',
+  danger: '#B42323',
   success: '#2E7D32',
-  warning: '#ED6C02',
-  userBubble: '#208AEF',
+  warning: '#A14800',
+  userBubble: '#0066CC',
   userBubbleText: '#FFFFFF',
   assistantBubble: '#E9E9EE',
   inputBackground: '#F2F2F7',
@@ -38,8 +44,11 @@ const dark: Theme = {
   text: '#F2F2F5',
   textSecondary: '#9A9AA3',
   border: '#2E2E38',
-  tint: '#4DA3F5',
-  danger: '#EF5350',
+  tint: '#70B7FF',
+  buttonPrimary: '#0A65C7',
+  buttonSecondary: '#303038',
+  buttonDanger: '#BA2525',
+  danger: '#FF8885',
   success: '#66BB6A',
   warning: '#FFA726',
   userBubble: '#1C6FD1',

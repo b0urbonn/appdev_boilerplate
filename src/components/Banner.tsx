@@ -1,5 +1,7 @@
+import { useTheme } from '@/theme';
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import { SmoothPressable } from '@/components/SmoothPressable';
 
 interface Props {
   text: string;
@@ -9,17 +11,20 @@ interface Props {
 }
 
 export function Banner({ text, actionLabel, onPress }: Props) {
+  const theme = useTheme();
   return (
-    <Pressable
+    <SmoothPressable
       onPress={onPress}
+      accessible={!!onPress}
+      accessibilityRole={onPress ? 'button' : 'none'}
       disabled={!onPress}
-      style={[styles.container, { backgroundColor: '#B3261E' }]}
+      style={[styles.container, { backgroundColor: theme.card }]}
     >
-      <Text style={styles.text}>
+      <Text style={[styles.text, { color: theme.danger }]}>
         {text}
         {actionLabel ? `  ${actionLabel}` : ''}
       </Text>
-    </Pressable>
+    </SmoothPressable>
   );
 }
 

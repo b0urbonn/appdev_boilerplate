@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.localaidevice'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.localaidevice'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+  externalNativeBuild {
+    cmake {
+      path 'src/main/cpp/CMakeLists.txt'
+      version '3.22.1'
+    }
+  }
+}

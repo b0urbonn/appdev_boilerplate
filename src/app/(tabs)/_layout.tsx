@@ -43,6 +43,7 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: 'Chat',
+          sceneStyle: { backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom },
           tabBarIcon: tabIcon('chatbubble-ellipses', 'chatbubble-ellipses-outline'),
         }}
       />

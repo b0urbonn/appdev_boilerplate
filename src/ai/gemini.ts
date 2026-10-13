@@ -11,57 +11,47 @@ interface GeminiProviderOptions {
   model: string;
 }
 
+interface ApiErrorDetails {
+  '@type'?: string;
+  retryDelay?: string;
+  violations?: { quotaId?: string; quotaDimensions?: { model?: string } }[];
+}
+
 class HttpError extends Error {
-  status: number;
-  apiMessage?: string;
-  constructor(status: number, apiMessage?: string) {
-    super(`HTTP ${status}`);
-    this.status = status;
-    this.apiMessage = apiMessage;
+  constructor(public status: number, public apiMessage?: string, public details: ApiErrorDetails[] = [], public retryAfterMs?: number) {
+    super(apiMessage ?? `HTTP ${status}`);
   }
 }
 
-function friendlyError(e: unknown, model?: string): Error {
-  if (e instanceof HttpError) {
-    if (e.status === 429) {
-      return new Error('Free-tier rate limit reached, wait a minute.');
-    }
-    if (e.status === 500 || e.status === 503) {
-      return new Error(
-        `Gemini had a server error with ${model}${e.apiMessage ? ` (${e.apiMessage})` : ''}. This model may not support chat - choose "Auto" or another model in Chat settings.`
-      );
-    }
-    if (e.status === 404) {
-      return new Error(
-        `Model ${model} was not found for this API key - choose another model in Chat settings.`
-      );
-    }
-    if (e.status === 400 || e.status === 401 || e.status === 403) {
-      return new Error(
-        e.apiMessage
-          ? `Invalid API key or model (${e.apiMessage})`
-          : 'Invalid API key or model.'
-      );
-    }
-    return new Error(e.apiMessage ?? `Request failed (HTTP ${e.status}).`);
+function friendlyError(error: unknown, model?: string): Error {
+  if (error instanceof HttpError) {
+    if (error.status === 429) return new Error('Available cloud models are limited. Please try again later.');
+    if ([500, 502, 503, 504].includes(error.status)) return new Error('Cloud AI is busy. Please try again shortly.');
+    if (error.status === 404) return new Error(`Model ${model} is unavailable. Choose Auto in Chat settings.`);
+    if (error.status === 401 || error.status === 403) return new Error('Check your Gemini API key and access in Chat settings.');
+    return new Error(error.apiMessage ?? `Request failed (HTTP ${error.status}).`);
   }
-  return new Error('Network request failed - are you offline?');
+  return error instanceof Error && error.name === 'AbortError' ? error : new Error('Network request failed. Check your connection.');
 }
 
 async function toHttpError(res: Response): Promise<HttpError> {
-  let apiMessage: string | undefined;
-  try {
-    const body = await res.json();
-    apiMessage = body?.error?.message;
-  } catch {
-    // Body wasn't JSON - fall through to status-only error.
-  }
-  return new HttpError(res.status, apiMessage);
+  let body;
+  try { body = await res.json(); } catch { /* Non-JSON server error. */ }
+  const retry = res.headers.get('retry-after');
+  const retryAfterMs = retry ? (/^\d+(?:\.\d+)?$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now()) : undefined;
+  return new HttpError(res.status, body?.error?.message, body?.error?.details, retryAfterMs);
 }
 
 async function throwForBadResponse(res: Response): Promise<void> {
-  if (res.ok) return;
-  throw await toHttpError(res);
+  if (!res.ok) throw await toHttpError(res);
+}
+
+function checkAbort(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    const error = new Error('Cancelled.');
+    error.name = 'AbortError';
+    throw error;
+  }
 }
 
 /** Model families that can't serve text chat (TTS, image, live, etc.). */
@@ -118,12 +108,11 @@ const versionOf = (name: string) =>
   parseFloat(/^gemini-(\d+(?:\.\d+)?)/.exec(name)?.[1] ?? '0');
 
 /**
- * Choose the best default from the models a key can use: the always-current
- * Flash alias, else the newest stable Flash, Flash-Lite, then any stable Gemini.
- * Flash is preferred because it has the most generous free-tier limits.
+ * Choose the best default from the catalogue: the
+ * newest stable Flash, Flash-Lite, then any stable Gemini or current alias.
+ * Concrete stable versions avoid retrying aliases of the same exhausted model.
  */
 export function pickBestModel(models: string[]): string | null {
-  if (models.includes(FALLBACK_MODEL)) return FALLBACK_MODEL;
   const stable = models
     .filter((m) => /^gemini-\d/.test(m))
     .filter((m) => !/preview|exp|image|tts|audio|live|embedding|thinking/.test(m))
@@ -131,26 +120,31 @@ export function pickBestModel(models: string[]): string | null {
   return (
     stable.find((m) => /-flash(-\d{3})?$/.test(m)) ??
     stable.find((m) => /-flash-lite(-\d{3})?$/.test(m)) ??
+    (models.includes(FALLBACK_MODEL) ? FALLBACK_MODEL : null) ??
     stable[0] ??
     models[0] ??
     null
   );
 }
 
-// Model list per API key, cached for this app session.
-const modelListCache = new Map<string, string[]>();
+// Refresh availability periodically. Quota observations are session-only and
+// account scoped; listing a model does not prove it has remaining quota.
+const CACHE_MS = 10 * 60 * 1000;
+const modelListCache = new Map<string, { models: string[]; expires: number }>();
+const modelListPending = new Map<string, Promise<string[] | null>>();
+const cooldowns = new Map<string, Map<string, number>>();
 
 async function modelListFor(apiKey: string): Promise<string[] | null> {
   const cached = modelListCache.get(apiKey);
-  if (cached) return cached;
-  try {
-    const list = await listGeminiModels(apiKey);
-    modelListCache.set(apiKey, list);
-    return list;
-  } catch {
-    // Listing failed (offline, bad key...); the generate call reports why.
-    return null;
-  }
+  if (cached && cached.expires > Date.now()) return cached.models;
+  const pending = modelListPending.get(apiKey);
+  if (pending) return pending;
+  const request = listGeminiModels(apiKey)
+    .then((models) => { modelListCache.set(apiKey, { models, expires: Date.now() + CACHE_MS }); return models; })
+    .catch(() => null)
+    .finally(() => modelListPending.delete(apiKey));
+  modelListPending.set(apiKey, request);
+  return request;
 }
 
 /** Flash-Lite / Flash / Pro tiers from the models a key can use. */
@@ -200,165 +194,181 @@ export function routeModel(models: string[], history: ChatMessage[]): string {
   return tiers.flash;
 }
 
-/** Candidate models to try in order when the user picked "Auto". */
-async function autoCandidates(
-  apiKey: string,
-  history: ChatMessage[]
-): Promise<string[]> {
-  const models = (await modelListFor(apiKey)) ?? [];
-  const routed = routeModel(models, history);
-  const flash = modelTiers(models).flash;
-  return [...new Set([routed, flash, FALLBACK_MODEL])];
+/** Only retry errors another model can resolve. Bad keys and bad payloads stop. */
+function canFallback(error: HttpError): boolean {
+  return [429, 404, 500, 502, 503, 504].includes(error.status) ||
+    error.status === 400 && /context (?:window|length)|input.*token.*limit|does not support.*(?:image|audio|system instruction)/i.test(error.apiMessage ?? '');
 }
 
-/** Statuses that make "Auto" fall through to the next candidate model. */
-const TRY_NEXT_MODEL = new Set([429, 404, 500, 503]);
+function modelBucket(model: string): string {
+  return model.replace(/^models\//, '').replace(/-\d{3}$/, '');
+}
 
-export function createGeminiProvider({
-  apiKey,
-  model,
-}: GeminiProviderOptions): ChatProvider {
+function cooldownUntil(apiKey: string, model: string): number {
+  const health = cooldowns.get(apiKey);
+  return Math.max(health?.get(modelBucket(model)) ?? 0, health?.get('*') ?? 0);
+}
+
+function markUnavailable(apiKey: string, model: string, error: HttpError) {
+  const health = cooldowns.get(apiKey) ?? new Map<string, number>();
+  cooldowns.set(apiKey, health);
+  const daily = /PerDay|per.day|daily|limit:\s*0\b/i.test(`${error.apiMessage ?? ''} ${JSON.stringify(error.details)}`);
+  let delay = error.status === 429 ? daily ? 60 * 60 * 1000 : 60 * 1000 : error.status === 404 ? CACHE_MS : 30 * 1000;
+  for (const detail of error.details) {
+    if (detail.retryDelay) {
+      const seconds = Number(detail.retryDelay.replace(/s$/, ''));
+      if (Number.isFinite(seconds)) delay = Math.max(delay, seconds * 1000);
+    }
+  }
+  if (Number.isFinite(error.retryAfterMs)) delay = Math.max(delay, error.retryAfterMs!);
+  const until = Date.now() + delay;
+  health.set(modelBucket(model), until);
+  for (const detail of error.details) {
+    for (const violation of detail.violations ?? []) {
+      if (violation.quotaDimensions?.model) health.set(modelBucket(violation.quotaDimensions.model), until);
+    }
+  }
+  // Project-wide spend limits cannot be resolved by choosing another model.
+  if (error.status === 429 && /spend[- ]based|spend.*limit/i.test(error.apiMessage ?? '')) health.set('*', until);
+  if (error.status === 404) modelListCache.delete(apiKey);
+}
+
+async function candidateModels(apiKey: string, chosen: string, history: ChatMessage[]): Promise<string[]> {
+  const catalog = await modelListFor(apiKey);
+  const available = catalog ?? [];
+  const media = history.some((message) => message.imageUri || message.audioUri);
+  const tiers = modelTiers(available);
+  const ranked = [...available].sort((a, b) => {
+    const penalty = (name: string) => (/preview|exp/.test(name) ? 10 : 0) + (/^gemma-/.test(name) ? 5 : 0);
+    return penalty(a) - penalty(b) || versionOf(b) - versionOf(a) || a.localeCompare(b);
+  });
+  const proposed = [chosen === AUTO_MODEL ? routeModel(available, history) : chosen, tiers.flash, tiers.lite, tiers.pro, ...ranked];
+  if (!catalog) proposed.push(FALLBACK_MODEL);
+  const seen = new Set<string>();
+  return proposed.filter((candidate, index) => {
+    if (catalog && !available.includes(candidate) && !(index === 0 && chosen !== AUTO_MODEL)) return false;
+    if (NON_CHAT_MODEL.test(candidate) || media && !/^gemini-/.test(candidate)) return false;
+    // The generic latest aliases are redundant when that concrete family exists.
+    if (candidate !== chosen && /-latest$/.test(candidate)) {
+      const family = candidate.replace(/-latest$/, '').replace('gemini-', '');
+      if (available.some((name) => /^gemini-\d/.test(name) && name.endsWith(`-${family}`) && !/preview|exp/.test(name))) return false;
+    }
+    const bucket = modelBucket(candidate);
+    if (seen.has(bucket)) return false;
+    seen.add(bucket);
+    return true;
+  });
+}
+
+export function createGeminiProvider({ apiKey, model }: GeminiProviderOptions): ChatProvider {
   return {
     id: 'cloud',
     label: `Gemini (${model === AUTO_MODEL ? 'auto' : model})`,
     requiresNetwork: true,
 
     async generate(history, { systemPrompt, signal, onToken, onContext, onModel }) {
-      const isAuto = model === AUTO_MODEL;
-      const candidates = isAuto
-        ? await autoCandidates(apiKey, history)
-        : [model];
-
-      const contents = await Promise.all(
-        history.map(async (m) => {
-          const parts: Record<string, unknown>[] = [];
-          if (m.imageUri) {
-            const { mimeType, data } = await readAttachmentBase64(m.imageUri);
+      checkAbort(signal);
+      const candidates = await candidateModels(apiKey, model, history);
+      checkAbort(signal);
+      const contents = await Promise.all(history.map(async (message) => {
+        const parts: Record<string, unknown>[] = [];
+        for (const uri of [message.imageUri, message.audioUri]) {
+          if (uri) {
+            const { mimeType, data } = await readAttachmentBase64(uri);
             parts.push({ inlineData: { mimeType, data } });
           }
-          if (m.audioUri) {
-            const { mimeType, data } = await readAttachmentBase64(m.audioUri);
-            parts.push({ inlineData: { mimeType, data } });
-          }
-          if (m.content) parts.push({ text: m.content });
-          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
-        })
-      );
-
-      const body: Record<string, unknown> = { contents };
-      if (systemPrompt) {
-        if (candidates.every((c) => /^gemma-/.test(c))) {
-          // gemma-* models reject systemInstruction - fold it into the
-          // first user message instead.
-          contents
-            .find((c) => c.role === 'user')
-            ?.parts.unshift({ text: `${systemPrompt}\n\n` });
-        } else {
-          body.systemInstruction = { parts: [{ text: systemPrompt }] };
         }
-      }
-
-      const post = (m: string) =>
-        fetch(`${API_BASE}/models/${m}:streamGenerateContent?alt=sse`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey,
-          },
-          body: JSON.stringify(body),
-          signal,
-        });
-
-      let res: Response | null = null;
-      let fail: HttpError | null = null;
-      let resolved = candidates[0];
+        if (message.content) parts.push({ text: message.content });
+        return { role: message.role === 'assistant' ? 'model' : 'user', parts };
+      }));
+      let failure: unknown;
+      let failedModel: string | undefined;
+      let skipped = false;
 
       for (const candidate of candidates) {
-        resolved = candidate;
-        // An explicitly chosen model gets one 1 s retry on 500/503.
-        for (let attempt = 0; ; attempt++) {
-          try {
-            res = await post(candidate);
-          } catch (e) {
-            throw friendlyError(e, candidate);
-          }
-          if (res.ok) {
-            fail = null;
-            break;
-          }
-          fail = await toHttpError(res);
-          const transient = fail.status === 500 || fail.status === 503;
-          if (!isAuto && transient && attempt === 0 && !signal?.aborted) {
-            await new Promise((r) => setTimeout(r, 1000));
-            continue;
-          }
-          break;
+        checkAbort(signal);
+        if (cooldownUntil(apiKey, candidate) > Date.now()) { skipped = true; continue; }
+        // Build per candidate: cloud Gemma rejects systemInstruction.
+        const candidateContents = contents.map((content) => ({ ...content, parts: [...content.parts] }));
+        const body: Record<string, unknown> = { contents: candidateContents };
+        if (systemPrompt) {
+          if (/^gemma-/.test(candidate)) candidateContents.find((content) => content.role === 'user')?.parts.unshift({ text: `${systemPrompt}\n\n` });
+          else body.systemInstruction = { parts: [{ text: systemPrompt }] };
         }
-        if (res!.ok) break;
-        // "Auto" falls through to the next candidate on these statuses.
-        if (!fail || !TRY_NEXT_MODEL.has(fail.status)) break;
-      }
-
-      if (!res?.ok) {
-        throw friendlyError(fail ?? new HttpError(res?.status ?? 500), resolved);
-      }
-      onModel?.(resolved);
-      const limit = getInputLimit(apiKey, resolved);
-
-      // Parse the SSE stream: lines of "data: {json}" separated by blanks.
-      // Chunks may split mid-line, so keep a leftover buffer.
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let full = '';
-      let usedTokens: number | undefined;
-
-      const handleLine = (line: string) => {
-        if (!line.startsWith('data:')) return;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === '[DONE]') return;
-        let json;
+        let full = '';
+        let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
         try {
-          json = JSON.parse(payload);
-        } catch {
-          // Partial or non-JSON data line - skip.
-          return;
-        }
-        // The stream can deliver an error object mid-response - surface it.
-        if (json?.error) {
-          throw friendlyError(
-            new HttpError(Number(json.error.code) || 500, json.error.message),
-            resolved
-          );
-        }
-        // Total tokens of this exchange = how much context the chat now uses.
-        const total = json?.usageMetadata?.totalTokenCount;
-        if (typeof total === 'number') usedTokens = total;
-        const parts = json?.candidates?.[0]?.content?.parts ?? [];
-        for (const p of parts) {
-          if (typeof p.text === 'string') {
-            full += p.text;
-            onToken(p.text);
+          const response = await fetch(`${API_BASE}/models/${candidate}:streamGenerateContent?alt=sse`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify(body), signal,
+          });
+          if (!response.ok) throw await toHttpError(response);
+          if (!response.body) throw new Error('Empty response stream.');
+          reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let usedTokens: number | undefined;
+          let announced = false;
+          const handleLine = (line: string) => {
+            if (!line.startsWith('data:')) return;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') return;
+            let json;
+            try { json = JSON.parse(payload); } catch { return; }
+            if (json?.error) throw new HttpError(Number(json.error.code) || 500, json.error.message, json.error.details);
+            if (typeof json?.usageMetadata?.totalTokenCount === 'number') usedTokens = json.usageMetadata.totalTokenCount;
+            for (const part of json?.candidates?.[0]?.content?.parts ?? []) {
+              if (typeof part.text === 'string' && part.text && !part.thought) {
+                if (!announced) { onModel?.(candidate); announced = true; }
+                full += part.text;
+                onToken(part.text);
+              }
+            }
+          };
+          while (true) {
+            checkAbort(signal);
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let newline: number;
+            while ((newline = buffer.indexOf('\n')) >= 0) {
+              const line = buffer.slice(0, newline);
+              buffer = buffer.slice(newline + 1);
+              handleLine(line);
+            }
+          }
+          buffer += decoder.decode();
+          handleLine(buffer);
+          checkAbort(signal);
+          cooldowns.get(apiKey)?.delete(modelBucket(candidate));
+          if (usedTokens !== undefined) onContext?.({ usedTokens, maxTokens: inputLimits.get(candidate) });
+          if (!inputLimits.has(candidate)) void getInputLimit(apiKey, candidate);
+          return full;
+        } catch (error) {
+          checkAbort(signal);
+          failure = error;
+          failedModel = candidate;
+          if (error instanceof HttpError && canFallback(error)) {
+            markUnavailable(apiKey, candidate, error);
+            // Switching after tokens were shown would merge two unrelated answers.
+            if (!full) continue;
+          }
+          throw friendlyError(error, candidate);
+        } finally {
+          if (reader) {
+            try { await reader.cancel(); } catch { /* Closed or interrupted stream. */ }
+            reader.releaseLock();
           }
         }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, nl);
-          buffer = buffer.slice(nl + 1);
-          handleLine(line);
-        }
       }
-      handleLine(buffer); // flush trailing partial line
-      if (usedTokens !== undefined) {
-        onContext?.({ usedTokens, maxTokens: await limit });
+      if (failure) throw friendlyError(failure, failedModel);
+      if (skipped) {
+        const soonest = Math.min(...candidates.map((candidate) => cooldownUntil(apiKey, candidate)));
+        const minutes = Math.max(1, Math.ceil((soonest - Date.now()) / 60000));
+        throw new Error(`Cloud models are limited. Retry in about ${minutes} min.`);
       }
-      return full;
+      throw new Error('No compatible cloud model is available for this message.');
     },
   };
 }

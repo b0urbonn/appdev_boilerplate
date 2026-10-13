@@ -4,12 +4,13 @@ import React from 'react';
 import {
   Image,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { IconButton } from '@/components/Button';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import { useTheme, type Theme } from '../theme';
 
 interface Props {
@@ -21,7 +22,7 @@ interface Props {
   generating?: boolean;
   /** Local URI of the staged image attachment. */
   imageUri?: string | null;
-  /** When given, an attach-image button is shown inside the pill. */
+  /** When given, an attach-image button is shown beside the input. */
   onPickImage?: () => void;
   onRemoveImage?: () => void;
   /** Staged voice message waiting to be sent. */
@@ -31,14 +32,14 @@ interface Props {
   recording?: boolean;
   /** Elapsed recording time in milliseconds. */
   recordingMs?: number;
-  /** When given, a mic button is shown on empty input. */
+  /** When given, a mic button is shown beside the input. */
   onStartRecording?: () => void;
   onStopRecording?: () => void;
   onCancelRecording?: () => void;
 }
 
 /** Height of one line of the input row (inside the pill border). */
-const ROW_H = 42;
+const ROW_H = 46;
 
 const mmss = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
@@ -69,7 +70,7 @@ export function ChatInput({
     (value.trim().length > 0 || !!imageUri || !!audio);
   const dimmed = disabled || generating;
   const showMic =
-    !!onStartRecording && value.trim().length === 0 && !audio;
+    !!onStartRecording && !audio;
 
   return (
     <View
@@ -94,7 +95,7 @@ export function ChatInput({
                 fontWeight: '600',
               }}
             >
-              Attached - will be sent with your message
+              Ready to send
             </Text>
           </View>
           {imageUri && (
@@ -110,14 +111,14 @@ export function ChatInput({
                   Ready to send
                 </Text>
               </View>
-              <Pressable
+              <SmoothPressable
                 onPress={onRemoveImage}
                 accessibilityLabel="Remove image"
                 hitSlop={8}
-                style={[styles.removeBtn, { backgroundColor: theme.border }]}
+                style={[styles.removeBtn, { backgroundColor: theme.buttonDanger }]}
               >
-                <Ionicons name="close" size={18} color={theme.text} />
-              </Pressable>
+                <Ionicons name="close" size={18} color="#FFFFFF" />
+              </SmoothPressable>
             </View>
           )}
           {audio && (
@@ -131,6 +132,8 @@ export function ChatInput({
         </View>
       )}
       <View style={styles.inputRow}>
+        {!recording && onPickImage && <IconButton icon="attach-outline" label="Attach image" onPress={onPickImage} disabled={dimmed} style={styles.toolButton} />}
+
         <View
           style={[
             styles.pill,
@@ -142,23 +145,19 @@ export function ChatInput({
         >
           {recording ? (
             <View style={styles.recRow}>
-              <View style={[styles.recDot, { backgroundColor: theme.danger }]} />
+              <View style={[styles.recDot, { backgroundColor: theme.buttonDanger }]} />
               <Text style={{ color: theme.text, fontSize: 15 }}>
-                Recording {mmss(recordingMs ?? 0)}
+                {mmss(recordingMs ?? 0)}
               </Text>
               <View style={styles.flex} />
-              <Pressable
+              <SmoothPressable
                 onPress={onCancelRecording}
                 accessibilityLabel="Discard recording"
                 hitSlop={8}
-                style={styles.iconBtn}
+                style={[styles.iconBtn, { backgroundColor: theme.buttonDanger }]}
               >
-                <Ionicons
-                  name="trash-outline"
-                  size={22}
-                  color={theme.danger}
-                />
-              </Pressable>
+                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+              </SmoothPressable>
             </View>
           ) : (
             <>
@@ -171,12 +170,13 @@ export function ChatInput({
                   // RN-web draws a focus outline unless removed.
                   Platform.OS === 'web' && ({ outlineStyle: 'none' } as object),
                 ]}
+                accessibilityLabel="Message"
                 placeholder={
                   disabled
-                    ? 'Set up the AI in Chat settings to start'
+                    ? 'Message…'
                     : imageUri || audio
-                      ? 'Add a message (optional)...'
-                      : 'Message AI...'
+                      ? 'Add a message…'
+                      : 'Message…'
                 }
                 placeholderTextColor={theme.textSecondary}
                 value={value}
@@ -200,67 +200,38 @@ export function ChatInput({
                     : undefined
                 }
               />
-              {onPickImage && (
-                <Pressable
-                  onPress={onPickImage}
-                  disabled={dimmed}
-                  accessibilityLabel="Attach image"
-                  hitSlop={4}
-                  style={[styles.iconBtn, dimmed && styles.faded]}
-                >
-                  <Ionicons
-                    name="attach"
-                    size={26}
-                    color={theme.textSecondary}
-                  />
-                </Pressable>
-              )}
-              {showMic && (
-                <Pressable
-                  onPress={onStartRecording}
-                  disabled={dimmed}
-                  accessibilityLabel="Record voice message"
-                  hitSlop={4}
-                  style={[styles.iconBtn, dimmed && styles.faded]}
-                >
-                  <Ionicons
-                    name="mic-outline"
-                    size={24}
-                    color={theme.textSecondary}
-                  />
-                </Pressable>
-              )}
             </>
           )}
         </View>
+        {!recording && showMic && <IconButton icon="mic-outline" label="Record voice message" onPress={onStartRecording} disabled={dimmed} style={styles.toolButton} />}
         {recording ? (
-          <Pressable
+          <SmoothPressable
             onPress={onStopRecording}
             accessibilityLabel="Use recording"
-            style={[styles.action, { backgroundColor: theme.tint }]}
+            style={[styles.action, { backgroundColor: theme.buttonPrimary }]}
           >
             <Ionicons name="checkmark" size={22} color="#FFF" />
-          </Pressable>
+          </SmoothPressable>
         ) : generating ? (
-          <Pressable
+          <SmoothPressable
             onPress={onStop}
             accessibilityLabel="Stop generating"
-            style={[styles.action, { backgroundColor: theme.danger }]}
+            style={[styles.action, { backgroundColor: theme.buttonDanger }]}
           >
             <Ionicons name="stop" size={22} color="#FFF" />
-          </Pressable>
+          </SmoothPressable>
         ) : (
-          <Pressable
+          <SmoothPressable
             onPress={onSend}
             disabled={!canSend}
             accessibilityLabel="Send message"
             style={[
               styles.action,
-              { backgroundColor: canSend ? theme.tint : theme.border },
+              { backgroundColor: canSend ? theme.buttonPrimary : theme.buttonSecondary },
             ]}
           >
-            <Ionicons name="arrow-up" size={22} color="#FFF" />
-          </Pressable>
+            <Ionicons name="arrow-up" size={22} color={canSend ? '#FFFFFF' : theme.textSecondary} />
+          </SmoothPressable>
         )}
       </View>
     </View>
@@ -299,21 +270,21 @@ function AudioPreview({
 
   return (
     <View style={styles.trayItem}>
-      <Pressable
+      <SmoothPressable
         onPress={toggle}
         accessibilityRole="button"
         accessibilityLabel={
           status.playing ? 'Pause preview' : 'Play preview'
         }
         hitSlop={6}
-        style={[styles.audioPlay, { backgroundColor: theme.tint }]}
+        style={[styles.audioPlay, { backgroundColor: theme.buttonPrimary }]}
       >
         <Ionicons
           name={status.playing ? 'pause' : 'play'}
           size={20}
           color="#FFF"
         />
-      </Pressable>
+      </SmoothPressable>
       <View style={styles.flex}>
         <Text style={{ color: theme.text, fontSize: 15, fontWeight: '600' }}>
           Voice message
@@ -322,14 +293,14 @@ function AudioPreview({
           {mmss(shownMs)}
         </Text>
       </View>
-      <Pressable
+      <SmoothPressable
         onPress={onRemove}
         accessibilityLabel="Remove voice message"
         hitSlop={8}
-        style={[styles.removeBtn, { backgroundColor: theme.border }]}
+        style={[styles.removeBtn, { backgroundColor: theme.buttonDanger }]}
       >
-        <Ionicons name="close" size={18} color={theme.text} />
-      </Pressable>
+        <Ionicons name="close" size={18} color="#FFFFFF" />
+      </SmoothPressable>
     </View>
   );
 }
@@ -364,21 +335,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  toolButton: { height: ROW_H + 2, flexShrink: 0 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   pill: {
     flex: 1,
     minHeight: ROW_H + 2,
+    minWidth: 0,
     borderRadius: (ROW_H + 2) / 2,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 14,
-    paddingRight: 4,
+    paddingHorizontal: 12,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -404,6 +376,7 @@ const styles = StyleSheet.create({
   action: {
     width: ROW_H + 2,
     height: ROW_H + 2,
+    flexShrink: 0,
     borderRadius: (ROW_H + 2) / 2,
     alignItems: 'center',
     justifyContent: 'center',

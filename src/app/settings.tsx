@@ -2,10 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter, type Href } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { deleteModel } from '@/ai/local';
 import { exportBackup, pickBackup, restoreBackup } from '@/backup/backup';
+import { Button } from '@/components/Button';
 import { Section } from '@/components/Section';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import { clearAllConversations } from '@/db/conversations';
 import { useSettings } from '@/settings/SettingsContext';
 import type { ThemeMode } from '@/settings/storage';
@@ -114,6 +116,7 @@ export default function SettingsScreen() {
               color: theme.text,
             },
           ]}
+          accessibilityLabel="Nickname"
           value={nicknameDraft}
           onChangeText={setNicknameDraft}
           onBlur={() => update('nickname', nicknameDraft.trim())}
@@ -125,39 +128,38 @@ export default function SettingsScreen() {
 
       <Section title="Appearance" theme={theme}>
         <View
-          style={[styles.segmented, { backgroundColor: theme.inputBackground }]}
+          style={styles.segmented}
         >
           {THEME_OPTIONS.map((o) => {
             const active = settings.theme === o.id;
             return (
-              <Pressable
+              <SmoothPressable
                 key={o.id}
+                accessibilityRole="radio"
+                accessibilityLabel={`${o.label} appearance`}
+                accessibilityState={{ checked: active }}
                 onPress={() => update('theme', o.id)}
                 style={[
                   styles.segment,
                   {
-                    backgroundColor: active
-                      ? theme.background === '#0E0E12'
-                        ? theme.border
-                        : theme.card
-                      : 'transparent',
+                    backgroundColor: active ? theme.buttonPrimary : theme.buttonSecondary,
                   },
                 ]}
               >
                 <Ionicons
                   name={o.icon}
                   size={16}
-                  color={active ? theme.tint : theme.textSecondary}
+                  color={active ? '#FFFFFF' : theme.textSecondary}
                 />
                 <Text
                   style={{
-                    color: active ? theme.text : theme.textSecondary,
+                    color: active ? '#FFFFFF' : theme.textSecondary,
                     fontWeight: active ? '700' : '400',
                   }}
                 >
                   {o.label}
                 </Text>
-              </Pressable>
+              </SmoothPressable>
             );
           })}
         </View>
@@ -168,30 +170,11 @@ export default function SettingsScreen() {
           Save your chat and settings to a file, or restore them later. Your
           Gemini API key and the downloaded local model are not included.
         </Text>
-        <Pressable
-          onPress={backup}
-          disabled={busy}
-          style={[styles.button, { borderColor: theme.tint }, busy && styles.faded]}
-        >
-          <View style={styles.buttonRow}>
-            <Ionicons name="cloud-upload-outline" size={18} color={theme.tint} />
-            <Text style={{ color: theme.tint, fontWeight: '600' }}>Back up data</Text>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={restore}
-          disabled={busy}
-          style={[styles.button, { borderColor: theme.tint }, busy && styles.faded]}
-        >
-          <View style={styles.buttonRow}>
-            <Ionicons name="cloud-download-outline" size={18} color={theme.tint} />
-            <Text style={{ color: theme.tint, fontWeight: '600' }}>
-              Restore from backup
-            </Text>
-          </View>
-        </Pressable>
+        <Button label="Back up data" icon="cloud-upload-outline" onPress={backup} disabled={busy} style={{ marginTop: 12 }} />
+        <Button label="Restore from backup" icon="cloud-download-outline" variant="secondary" onPress={restore} disabled={busy} style={{ marginTop: 10 }} />
         {status && (
           <Text
+            accessibilityLiveRegion="polite"
             style={{
               color: status.error ? theme.danger : theme.success,
               marginTop: 8,
@@ -217,9 +200,7 @@ export default function SettingsScreen() {
         />
       </Section>
 
-      <Pressable onPress={resetAllData} style={[styles.button, { borderColor: theme.danger }]}>
-        <Text style={{ color: theme.danger, fontWeight: '600' }}>Reset all data</Text>
-      </Pressable>
+      <Button label="Reset all data" icon="trash-outline" variant="destructiveSecondary" onPress={resetAllData} style={{ marginTop: 10 }} />
     </ScrollView>
   );
 }
@@ -244,10 +225,10 @@ function LinkRow({
   theme: Theme;
 }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="link" style={styles.row}>
+    <SmoothPressable onPress={onPress} accessibilityRole="link" style={[styles.row, styles.linkRow, { backgroundColor: theme.background }]}>
       <Text style={{ color: theme.text, fontSize: 15 }}>{label}</Text>
       <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-    </Pressable>
+    </SmoothPressable>
   );
 }
 
@@ -263,8 +244,7 @@ const styles = StyleSheet.create({
   },
   segmented: {
     flexDirection: 'row',
-    borderRadius: 10,
-    padding: 2,
+    gap: 10,
   },
   segment: {
     flex: 1,
@@ -272,17 +252,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: 8,
+    borderRadius: 12,
+    minHeight: 48,
     paddingVertical: 8,
   },
-  button: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  faded: { opacity: 0.5 },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  linkRow: { minHeight: 48, alignItems: 'center', marginTop: 5, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 10 },
 });

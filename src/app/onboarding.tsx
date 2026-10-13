@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button } from '@/components/Button';
 import { useSettings } from '@/settings/SettingsContext';
 import { useTheme } from '@/theme';
 
@@ -62,6 +62,7 @@ export default function OnboardingScreen() {
                 Pick a nickname. You can change it later in Settings.
               </Text>
               <TextInput
+                accessibilityLabel="Nickname"
                 value={nickname}
                 onChangeText={setNickname}
                 placeholder="Your nickname"
@@ -106,31 +107,8 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={styles.footer}>
-          {step > 0 ? (
-            <Pressable onPress={() => setStep(step - 1)} style={styles.secondary}>
-              <Text style={{ color: theme.textSecondary, fontSize: 16 }}>Back</Text>
-            </Pressable>
-          ) : (
-            <Pressable onPress={() => setStep(SLIDES.length)} style={styles.secondary}>
-              <Text style={{ color: theme.textSecondary, fontSize: 16 }}>Skip</Text>
-            </Pressable>
-          )}
-          <Pressable
-            accessibilityRole="button"
-            disabled={isNicknameStep && !trimmed}
-            onPress={() => (isNicknameStep ? finish() : setStep(step + 1))}
-            style={[
-              styles.primary,
-              {
-                backgroundColor: theme.tint,
-                opacity: isNicknameStep && !trimmed ? 0.4 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.primaryText}>
-              {isNicknameStep ? 'Get started' : 'Next'}
-            </Text>
-          </Pressable>
+          <Button label={step > 0 ? 'Back' : 'Skip'} variant="secondary" onPress={() => setStep(step > 0 ? step - 1 : SLIDES.length)} />
+          <Button label={isNicknameStep ? 'Get started' : 'Next'} disabled={isNicknameStep && !trimmed} onPress={() => isNicknameStep ? finish() : setStep(step + 1)} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -167,7 +145,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  secondary: { paddingVertical: 14, paddingHorizontal: 12 },
-  primary: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 28 },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });

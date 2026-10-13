@@ -1,5 +1,8 @@
+import { Button } from './Button';
+import { Popup } from './Popup';
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import Svg, { Circle } from 'react-native-svg';
 import type { ContextUsage } from '@/ai/types';
 import type { Theme } from '@/theme';
@@ -77,20 +80,19 @@ export function ContextRing({
 
   return (
     <>
-      <Pressable
+      <SmoothPressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Context window ${percent} used`}
         hitSlop={8}
+        style={[styles.contextButton, { backgroundColor: theme.buttonSecondary }]}
       >
         <Ring size={34} stroke={4} fraction={fraction} color={color} track={theme.border}>
           <Text style={[styles.small, { color: theme.text }]}>{percent}</Text>
         </Ring>
-      </Pressable>
+      </SmoothPressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={[styles.sheet, { backgroundColor: theme.card }]}>
+      <Popup visible={open} onClose={() => setOpen(false)} label="AI memory" style={styles.sheet}>
             <Text style={[styles.title, { color: theme.text }]}>AI memory (context window)</Text>
             <Ring size={140} stroke={12} fraction={fraction} color={color} track={theme.border}>
               <Text style={[styles.big, { color: theme.text }]}>{percent}</Text>
@@ -127,22 +129,16 @@ export function ContextRing({
                 ? 'Estimated at ~4 characters per token until the AI reports real numbers.'
                 : 'Reported by the AI after its last reply.'}
             </Text>
-          </View>
-        </Pressable>
-      </Modal>
+            <Button label="Done" variant="secondary" onPress={() => setOpen(false)} style={{ alignSelf: 'stretch', marginTop: 8 }} />
+      </Popup>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  small: { fontSize: 9, fontWeight: '700' },
+  contextButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  small: { fontSize: 11, fontWeight: '700' },
   big: { fontSize: 28, fontWeight: '700' },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    padding: 24,
-  },
   sheet: { borderRadius: 16, padding: 20, alignItems: 'center', gap: 8 },
   title: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
   line: { fontSize: 14, textAlign: 'center' },

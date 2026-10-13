@@ -102,7 +102,7 @@ function renderTextBlock(text: string, base: string, color: string, theme: Theme
   return nodes;
 }
 
-export function MarkdownText({ text, color, theme }: Props) {
+export const MarkdownText = React.memo(function MarkdownText({ text, color, theme }: Props) {
   // Odd chunks between ``` fences are code; an unclosed trailing fence
   // (still streaming) is rendered as code too.
   const chunks = text.split('```');
@@ -127,7 +127,7 @@ export function MarkdownText({ text, color, theme }: Props) {
     }
   });
   return <View style={styles.container}>{nodes}</View>;
-}
+});
 
 const styles = StyleSheet.create({
   container: { gap: 8 },

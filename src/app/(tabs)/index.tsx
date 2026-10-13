@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { IconButton } from '@/components/Button';
+import { SmoothPressable } from '@/components/SmoothPressable';
 import { useAiStatus } from '@/hooks/useAiStatus';
 import { useSettings } from '@/settings/SettingsContext';
 import { useTheme } from '@/theme';
@@ -32,7 +34,7 @@ export default function HomeScreen() {
   const { problem, isOnline } = useAiStatus();
 
   const providerLabel =
-    settings.provider === 'cloud' ? 'Cloud AI (Gemini)' : 'Local AI (Gemma 4 E2B)';
+    settings.provider === 'cloud' ? 'Cloud AI (Gemini)' : 'Local AI';
 
   return (
     <ScrollView
@@ -43,20 +45,13 @@ export default function HomeScreen() {
         <Text style={[styles.greeting, { color: theme.text }]}>
           Hi, {settings.nickname || 'there'}
         </Text>
-        <Pressable
-          onPress={() => router.push('/settings' as Href)}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-          hitSlop={10}
-        >
-          <Ionicons name="settings-outline" size={26} color={theme.text} />
-        </Pressable>
+        <IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings' as Href)} />
       </View>
       <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
         What would you like to do today?
       </Text>
 
-      <Pressable
+      <SmoothPressable
         onPress={() => router.push('/chat-settings' as Href)}
         style={[styles.status, { backgroundColor: theme.card, borderColor: theme.border }]}
       >
@@ -71,11 +66,11 @@ export default function HomeScreen() {
             {problem ?? 'Ready to chat'} - {isOnline ? 'Online' : 'Offline'}
           </Text>
         </View>
-      </Pressable>
+      </SmoothPressable>
 
       <View style={styles.grid}>
         {ACTIONS.map((a, i) => (
-          <Pressable
+          <SmoothPressable
             key={i}
             accessibilityRole="button"
             disabled={!a.onPress}
@@ -83,16 +78,18 @@ export default function HomeScreen() {
             style={({ pressed }) => [
               styles.tile,
               {
-                backgroundColor: theme.card,
-                borderColor: theme.border,
-                borderStyle: a.onPress ? 'solid' : 'dashed',
-                opacity: pressed ? 0.7 : a.onPress ? 1 : 0.5,
+                backgroundColor: a.onPress ? theme.buttonPrimary : theme.card,
+                borderColor: a.onPress ? theme.buttonPrimary : theme.border,
+                borderStyle: 'solid',
+                opacity: pressed ? 0.88 : 1,
               },
             ]}
           >
-            <Ionicons name={a.icon} size={32} color={theme.tint} />
-            <Text style={[styles.tileLabel, { color: theme.text }]}>{a.label}</Text>
-          </Pressable>
+            <View style={styles.tileContent}>
+              <Ionicons name={a.icon} size={32} color={a.onPress ? '#FFFFFF' : theme.textSecondary} />
+              <Text style={[styles.tileLabel, { color: a.onPress ? '#FFFFFF' : theme.text }]}>{a.label}</Text>
+            </View>
+          </SmoothPressable>
         ))}
       </View>
     </ScrollView>
@@ -130,5 +127,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  tileLabel: { fontSize: 16, fontWeight: '600' },
+  tileContent: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  tileLabel: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });
