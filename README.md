@@ -20,6 +20,12 @@ See **[docs/README.md](docs/README.md)** for the documentation index.
 - [Android hardware detector module](docs/LOCAL-DEVICE.md)
 - [Full project overview](docs/PROJECT-OVERVIEW.md)
 
+## Download
+
+Grab the installable APK from
+[Releases](https://github.com/b0urbonn/Maalam-Project/releases) —
+`maalam-1.0.0-release.apk` (v1.0.0, debug-signed, ARM devices).
+
 ## Quick start
 
 Install packages, then run the Android development build on an ARM phone:
