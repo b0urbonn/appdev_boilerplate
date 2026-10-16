@@ -319,6 +319,20 @@ The free Expo plan has a limited number of builds per month (see
 eas build --profile preview --platform android
 ```
 
+Or build the release APK locally (needs the environment from section 6.3):
+
+```bash
+cd android
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+# → app/build/outputs/apk/release/app-release.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+This APK is signed with the repo's **debug keystore** — fine for
+sideloading and testing. Publishing to Google Play requires a real upload
+key (generate a keystore, wire it into `android/app/build.gradle`
+`signingConfigs.release`, then use `bundleRelease` for the AAB).
+
 ### 6.3 Optional: build on your own computer (Android Studio)
 
 Skip this unless you want unlimited builds on your own PC.

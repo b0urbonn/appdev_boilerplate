@@ -1,8 +1,26 @@
 # Maalam
 
-A small, readable Android chatbot app you can build on. It is
-**offline-first**: every conversation lives in a local SQLite database, so
-browsing, creating, and reading chats works with no network at all.
+An Android-first detector app for deepfakes and harmful content. It is
+**offline-first**: scans, detections, chats and settings all live in a local
+SQLite database, so everything works with no network at all.
+
+What it does:
+
+- **Scan** — attach an image for a manipulation scan, or submit text/voice
+  clips to flag hate speech, threats, scams and other harmful content.
+- **Verdict reports** — every scan ends with a risk score, a verdict, and a
+  shareable full report (`src/app/scans/[id].tsx`).
+- **Protection monitoring** — pick apps to watch
+  (`src/app/protected-apps.tsx`); a native foreground service
+  (`modules/app-monitor/`) captures frames and analyzes them via a headless
+  task (`index.js` → `src/detection/task.ts`), then raises alerts
+  (`src/app/alerts.tsx`).
+- **Learn** — offline lessons on spotting manipulated media
+  (`src/learn/lessons.ts`, `src/app/(tabs)/learn.tsx`).
+- **Assistant chat** — a built-in chatbot that answers questions, works
+  fully offline with the local model.
+- **Privacy** — no account, no uploads, local history. Optional app lock
+  via device authentication (`src/security/`).
 
 Two AI providers are included and can be switched in **Detector settings** (gear icon in the chat):
 
@@ -103,24 +121,48 @@ Internet access is needed for Gemini responses and the initial model download.
 ## Architecture
 
 ```
+index.js                       Registers the MaalamScan headless task (Android),
+                               then hands off to expo-router/entry
 src/app/_layout.tsx            DB init, SettingsProvider, onboarding gate (Stack.Protected)
 src/app/onboarding.tsx         Intro slides + nickname step (first launch only)
-src/app/(tabs)/_layout.tsx     Tabs: Home, Chat (no headers)
-src/app/(tabs)/index.tsx       Home: greeting, AI status card, action buttons
-src/app/(tabs)/chat.tsx        The single chat (streaming, retry, stop, banners, gear button)
+src/app/(tabs)/_layout.tsx     Tabs: Home, Scan, Chat, History, Learn
+src/app/(tabs)/index.tsx       Home: greeting, status, quick actions, featured lesson
+src/app/(tabs)/scan.tsx        Scan input: image, text or voice clip
+src/app/(tabs)/chat.tsx        Assistant chat (streaming, retry, stop, banners)
+src/app/(tabs)/history.tsx     Scan + detection history list
+src/app/(tabs)/learn.tsx       Lesson list
+src/app/learn/[id].tsx         Lesson detail
+src/app/scans/[id].tsx         Scan result: verdict + shareable report
+src/app/detections/[id].tsx    Detection detail
+src/app/apps/[packageName].tsx Per-app detection log
+src/app/alerts.tsx             Monitoring alerts inbox
+src/app/protected-apps.tsx     Choose which apps the monitor watches
+src/app/monitor-preview.tsx    Monitor status/preview
+src/app/privacy.tsx            Privacy screen
+src/app/terms.tsx              Terms screen
 src/app/settings.tsx           System settings (gear on Home): nickname, light/dark
                                theme, backup/restore, about, reset all data
-src/app/chat-settings.tsx      Chatbot settings (gear in Chat): provider, API key, model,
+src/app/chat-settings.tsx      Detector settings (gear in Chat): provider, API key, model,
                                local model download, system prompt, clear chat
+src/detection/                 analyzeFrame/analyzeContent, verdict parsing,
+                               headless scan task (task.ts)
+src/monitor/                   app-monitor native bridge (native.ts) + useMonitorSync
+src/learn/lessons.ts           Offline lesson content
+src/security/                  Device authentication (app lock)
 src/db/client.ts               SQLite open + PRAGMA user_version migrations
 src/db/conversations.ts        Conversation row for the single chat
 src/db/messages.ts             Message repository (status: done|pending|error)
+src/db/scans.ts                Scan rows (input, verdict, score, report)
+src/db/detections.ts           Monitor detection rows
 src/settings/storage.ts        kv-store settings + SecureStore API key
 src/settings/SettingsContext.tsx
 src/ai/types.ts                ChatProvider interface
 src/ai/gemini.ts               Gemini REST + SSE streaming
 src/ai/local.ts                LiteRT-LM engine, model download manager
 modules/local-ai-device/       Android hardware probes and native audio conversion
+modules/app-monitor/           Android native module: MaalamMonitorService
+                               (foreground capture) + MaalamScanTaskService
+                               (headless analysis task)
 src/ai/index.ts                getProvider(settings): provider switch
 src/hooks/useNetwork.ts        NetInfo connectivity
 src/hooks/useAiStatus.ts       "Can the selected AI answer right now?"
@@ -128,8 +170,12 @@ src/utils/confirm.ts           Confirm dialogs that work on Android and web
 src/backup/                    Backup/restore to a JSON file (share sheet on
                                Android, download on web)
 src/components/                Banner, ChatInput, MessageBubble, Section, Dropdown,
-                               ContextRing
+                               ContextRing, VerdictReport, DetectionRow, AppPicker,
+                               AppLockScreen, ActivityChart, FloatingTabBar
 src/theme.ts                   Light/dark colors
+demo-video/                    Standalone Remotion promo video project
+                               (npm run render:all → 81s landscape+portrait,
+                               npm run render:60 → 60s pair)
 ```
 
 ### Onboarding and nickname
@@ -149,15 +195,12 @@ Android, download in the browser) and restores it later. The backup
 contains the chat and settings — never the Gemini API key, and not the
 downloaded local model file.
 
-### Home buttons
+### Home actions
 
-The Home tab renders the `ACTIONS` array in `src/app/(tabs)/index.tsx` as a
-grid of buttons. The dashed "Your feature" tiles are empty placeholders
-(no `onPress` yet). To add a feature: create a screen (e.g.
-`src/app/notes.tsx`), then add `{ label, icon, onPress: (router) =>
-router.push('/notes') }` to `ACTIONS`. Icons are
-[Ionicons](https://icons.expo.fyi) names.
-
+The Home tab (`src/app/(tabs)/index.tsx`) shows greeting, AI status,
+quick actions (Scan, Chat, Alerts, Protected apps, Settings), a featured
+lesson card, and a monitor preview entry. To add a feature: create a
+screen under `src/app/` and link it with `router.push('/route')`.
 
 ### Offline-first data flow
 
@@ -171,8 +214,10 @@ Sending a message:
    retry. A `pending` message still present at app start is marked
    `error` ("Generation interrupted").
 
-The app has one chat (conversation id `main`); there is no chat history
-list. "Clear chat" in Detector settings deletes its messages.
+The app has one assistant chat (conversation id `main`); "Clear chat" in
+Detector settings deletes its messages. Scans and monitor detections are
+persisted separately in `src/db/scans.ts` / `src/db/detections.ts` and
+browsed from the **History** tab.
 
 ### Adding a new AI provider
 
@@ -184,7 +229,7 @@ calls `opts.onToken` for each streamed chunk.
 ### Changing the package name
 
 Edit `android.package` in `app.json` (currently
-`com.example.offlineaistarter`), then run `npx expo prebuild --clean` or
+`com.maalam.app`), then run `npx expo prebuild --clean` or
 `npx expo run:android` again to regenerate the native project. The
 `android/` directory is generated — do not edit it by hand.
 
@@ -207,4 +252,5 @@ npx expo lint
 npx expo-doctor
 npx expo prebuild --platform android --clean
 cd android && ./gradlew assembleDebug
+./gradlew assembleRelease          # signed, installable release APK
 ```

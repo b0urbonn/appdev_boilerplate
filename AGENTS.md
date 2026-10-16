@@ -10,11 +10,14 @@ npx tsc --noEmit                                    # typecheck
 npx expo lint                                       # eslint (eslint-config-expo)
 npx expo-doctor                                     # dependency/config health
 npx expo prebuild --platform android --clean        # regenerate android/
-cd android && ./gradlew assembleDebug               # build APK
+cd android && ./gradlew assembleDebug               # build debug APK
+./gradlew assembleRelease                           # release APK (debug-signed)
 # faster local build (ARM only, matches LiteRT-LM): add -PreactNativeArchitectures=arm64-v8a
 ```
 
-APK output: `android/app/build/outputs/apk/debug/app-debug.apk`
+APK output: `android/app/build/outputs/apk/debug/app-debug.apk`,
+release: `android/app/build/outputs/apk/release/app-release.apk`
+(debug-keystore signed — sideload only; Play needs a real upload key)
 
 ## Environment used for the native build
 
