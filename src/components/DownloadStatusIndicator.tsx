@@ -37,7 +37,7 @@ function formatEta(seconds: number | null): string {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-/** Persistent in-app controls shown after leaving Chat settings during a download. */
+/** Persistent in-app controls shown after leaving Detector settings during a download. */
 export function DownloadStatusIndicator() {
   const pathname = usePathname();
   const theme = useTheme();

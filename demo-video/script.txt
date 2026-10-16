@@ -1,0 +1,11 @@
+hook     What if your phone could tell what's real — and what's fake?
+intro    Meet Maalam — your offline-first guardian against deepfakes and harmful content.
+scan     Attach any image and run a manipulation scan — AI-generated and tampered media, spotted in seconds.
+detect   Text and voice clips are screened for hate speech, scams, and threats — each flagged with a clear verdict.
+verdict  Every scan ends with a verdict — a risk score you can read at a glance, and a full report you can share.
+monitor  Turn on protection and Maalam watches your chosen apps in the background — alerting you the moment something harmful appears.
+learn    Built-in lessons train your eye — so you can spot a fake even without the app.
+engine   Verdicts run on-device by default — or flip on cloud AI for extra power. Either way, your data stays yours.
+chat     And a built-in assistant answers your questions, even fully offline.
+trust    No account. No uploads. Every scan stays in your local history.
+outro    Maalam. See what's real. Coming soon to Google Play.

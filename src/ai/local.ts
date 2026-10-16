@@ -340,7 +340,7 @@ function friendlyLocalError(e: unknown): Error {
         );
       case 'MODEL_NOT_FOUND':
         return new Error(
-          'Model file not found - re-download it from Chat settings.'
+          'Model file not found - re-download it from Detector settings.'
         );
       case 'MODEL_NOT_LOADED':
         return new Error('The model is not loaded yet - try again.');
@@ -516,7 +516,10 @@ export function createLocalProvider(opts: {
       const last = history[history.length - 1];
       if (signal?.aborted) return '';
       if (!opts.isModelDownloaded()) {
-        throw new Error('Download Local AI in Chat settings first.');
+        throw new Error('Download Local AI in Detector settings first.');
+      }
+      if (last?.videoUri) {
+        throw new Error('Video scanning needs Cloud AI (Gemini). Switch the provider in Detector settings.');
       }
       const multimodal = !!(last?.imageUri || last?.audioUri);
       const instructions = [

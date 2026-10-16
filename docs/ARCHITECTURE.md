@@ -11,7 +11,7 @@ hides the bottom tab bar. The Home screen presents the selected-provider status
 and action tiles. Chat owns the single conversation, message composer, recorder,
 provider selection, streaming updates, retries, and stop control.
 
-Chat settings live in `src/app/chat-settings.tsx`; app appearance, profile,
+The Detector settings screen lives in `src/app/chat-settings.tsx`; app appearance, profile,
 backup, restore, and reset live in `src/app/settings.tsx`.
 
 ## Message and provider flow
@@ -86,3 +86,27 @@ screen uses `KeyboardAvoidingView`.
 App confirmation dialogs use `src/components/Popup.tsx` and `src/utils/confirm.ts`.
 They blur the app surface behind the dialog. System permission sheets and the
 Android image picker are owned by Android and are outside the app's popup layer.
+
+## Protected-app monitoring
+
+`modules/app-monitor/` is a local Expo module that watches the apps the user
+picked during onboarding. `MaalamMonitorService` (an Accessibility service)
+tracks the foreground app, shows a floating bubble while a protected app is
+open, and captures the screen when it changes (debounced, rate-limited and
+deduplicated with a difference hash plus the visible-text snapshot).
+
+Each captured frame starts `MaalamScanTaskService`, a React Native
+HeadlessJsTaskService that runs the `MaalamScan` task registered in `index.js`.
+`src/detection/task.ts` loads settings, calls `src/detection/analyze.ts` — which
+reuses the selected provider via `getProvider(settings)` with a JSON-only
+detection prompt — and reports the verdict back to the service with
+`AppMonitor.reportResult`. Flagged frames are moved into
+`documentDirectory/detections/` and stored in the `detections` SQLite table
+(`src/db/detections.ts`); clean frames are deleted.
+
+The bubble turns red and a top alert bar appears on a detection. Tapping opens
+an in-app popup; "View in Maalam" deep-links to `maalam://detections/<id>`,
+which resolves to `src/app/detections/[id].tsx`. The home screen shows the
+protection status, a protected-apps launcher and recent detections;
+`src/app/protected-apps.tsx` edits the monitored list. Settings sync to the
+service via `useMonitorSync` (`src/monitor/useMonitorSync.ts`).

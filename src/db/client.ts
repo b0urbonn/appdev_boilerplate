@@ -31,6 +31,39 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE messages ADD COLUMN audio_uri TEXT;
   `,
+  `
+  CREATE TABLE IF NOT EXISTS detections (
+    id TEXT PRIMARY KEY,
+    package_name TEXT NOT NULL,
+    app_label TEXT NOT NULL,
+    verdict TEXT NOT NULL,
+    confidence INTEGER NOT NULL,
+    summary TEXT NOT NULL,
+    findings TEXT NOT NULL,
+    screenshot_uri TEXT,
+    screen_text TEXT,
+    provider TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_detections_created
+    ON detections (created_at);
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS scans (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    media_uri TEXT,
+    text TEXT,
+    verdict TEXT NOT NULL,
+    confidence INTEGER NOT NULL,
+    summary TEXT NOT NULL,
+    findings TEXT NOT NULL,
+    provider TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_scans_created
+    ON scans (created_at);
+  `,
 ];
 
 export function newId(): string {

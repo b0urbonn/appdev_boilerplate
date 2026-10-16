@@ -7,6 +7,8 @@ export interface ChatMessage {
   imageUri?: string;
   /** Local file URI of a voice-message recording (local or cloud provider). */
   audioUri?: string;
+  /** Local file URI of a video clip (cloud provider only). */
+  videoUri?: string;
 }
 
 /** How much of the model's context window the conversation uses. */

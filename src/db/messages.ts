@@ -80,3 +80,55 @@ export async function deleteMessage(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM messages WHERE id = ?', id);
 }
+
+export interface ManualScan {
+  id: string;
+  type: 'image' | 'voice' | 'text';
+  title: string;
+  subtitle: string;
+  createdAt: number;
+}
+
+/** Strip markdown emphasis/heading markers for a one-line preview. */
+function plainLine(text: string): string {
+  return text
+    .split('\n')
+    .map((l) => l.replace(/^#+\s*/, '').replace(/[*_`~]/g, '').trim())
+    .find((l) => l.length > 0) ?? '';
+}
+
+/**
+ * Manual scans from the chatbot: each done assistant reply in the main
+ * conversation, paired with the user message that prompted it.
+ */
+export async function listManualScans(conversationId = 'main'): Promise<ManualScan[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<MessageRow>(
+    `SELECT * FROM messages
+     WHERE conversation_id = ? AND role = 'assistant' AND status = 'done'
+     ORDER BY created_at DESC`,
+    conversationId
+  );
+  const scans: ManualScan[] = [];
+  for (const reply of rows) {
+    const prompt = await db.getFirstAsync<MessageRow>(
+      `SELECT * FROM messages
+       WHERE conversation_id = ? AND role = 'user' AND created_at < ?
+       ORDER BY created_at DESC LIMIT 1`,
+      conversationId,
+      reply.created_at
+    );
+    if (!prompt) continue;
+    const type: ManualScan['type'] = prompt.image_uri ? 'image' : prompt.audio_uri ? 'voice' : 'text';
+    const title = prompt.content.trim().slice(0, 60)
+      || (type === 'image' ? 'Image scan' : type === 'voice' ? 'Voice clip' : 'Text check');
+    scans.push({
+      id: reply.id,
+      type,
+      title,
+      subtitle: plainLine(reply.content).slice(0, 80),
+      createdAt: reply.created_at,
+    });
+  }
+  return scans;
+}

@@ -1,6 +1,7 @@
 // Cloud provider: Gemini via raw REST (no SDK).
 // Uses expo/fetch because the stock React Native fetch does not stream.
 import { fetch } from 'expo/fetch';
+import * as FileSystem from 'expo-file-system/legacy';
 import { readAttachmentBase64 } from '@/attachments/files';
 import type { ChatMessage, ChatProvider } from './types';
 
@@ -27,8 +28,8 @@ function friendlyError(error: unknown, model?: string): Error {
   if (error instanceof HttpError) {
     if (error.status === 429) return new Error('Available cloud models are limited. Please try again later.');
     if ([500, 502, 503, 504].includes(error.status)) return new Error('Cloud AI is busy. Please try again shortly.');
-    if (error.status === 404) return new Error(`Model ${model} is unavailable. Choose Auto in Chat settings.`);
-    if (error.status === 401 || error.status === 403) return new Error('Check your Gemini API key and access in Chat settings.');
+    if (error.status === 404) return new Error(`Model ${model} is unavailable. Choose Auto in Detector settings.`);
+    if (error.status === 401 || error.status === 403) return new Error('Check your Gemini API key and access in Detector settings.');
     return new Error(error.apiMessage ?? `Request failed (HTTP ${error.status}).`);
   }
   return error instanceof Error && error.name === 'AbortError' ? error : new Error('Network request failed. Check your connection.');
@@ -179,7 +180,7 @@ export function routeModel(models: string[], history: ChatMessage[]): string {
   const tiers = modelTiers(models);
   const lastUser = [...history].reverse().find((m) => m.role === 'user');
   if (!lastUser) return tiers.flash;
-  if (lastUser.imageUri || lastUser.audioUri) return tiers.flash;
+  if (lastUser.imageUri || lastUser.audioUri || lastUser.videoUri) return tiers.flash;
   const content = lastUser.content;
   const totalChars = history.reduce((n, m) => n + m.content.length, 0);
   if (
@@ -236,7 +237,7 @@ function markUnavailable(apiKey: string, model: string, error: HttpError) {
 async function candidateModels(apiKey: string, chosen: string, history: ChatMessage[]): Promise<string[]> {
   const catalog = await modelListFor(apiKey);
   const available = catalog ?? [];
-  const media = history.some((message) => message.imageUri || message.audioUri);
+  const media = history.some((message) => message.imageUri || message.audioUri || message.videoUri);
   const tiers = modelTiers(available);
   const ranked = [...available].sort((a, b) => {
     const penalty = (name: string) => (/preview|exp/.test(name) ? 10 : 0) + (/^gemma-/.test(name) ? 5 : 0);
@@ -272,9 +273,21 @@ export function createGeminiProvider({ apiKey, model }: GeminiProviderOptions): 
       checkAbort(signal);
       const contents = await Promise.all(history.map(async (message) => {
         const parts: Record<string, unknown>[] = [];
-        for (const uri of [message.imageUri, message.audioUri]) {
+        if (message.videoUri) {
+          // Gemini inlineData caps around 20 MB; base64 inflates ~1.37x.
+          const info = await FileSystem.getInfoAsync(message.videoUri).catch(() => null);
+          if (info?.exists && (info.size ?? 0) > 19 * 1024 * 1024 / 1.37) {
+            throw new Error('This video is too large to scan. Trim it to under about 14 MB (roughly 1 minute).');
+          }
+        }
+        const mediaParts: [string | undefined, 'image' | 'audio' | 'video'][] = [
+          [message.imageUri, 'image'],
+          [message.audioUri, 'audio'],
+          [message.videoUri, 'video'],
+        ];
+        for (const [uri, kind] of mediaParts) {
           if (uri) {
-            const { mimeType, data } = await readAttachmentBase64(uri);
+            const { mimeType, data } = await readAttachmentBase64(uri, kind);
             parts.push({ inlineData: { mimeType, data } });
           }
         }

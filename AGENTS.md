@@ -35,3 +35,13 @@ export SKIP_IOS_FRAMEWORK_DOWNLOAD=1                # for npm install (litert-lm
 - `react-native-litert-lm` postinstall downloads iOS frameworks; set
   `SKIP_IOS_FRAMEWORK_DOWNLOAD=1` for Android-only installs.
 - The `android/` and `ios/` dirs are gitignored.
+
+- `demo-video/` is a standalone Remotion project (own package.json) that
+  renders the promo video in two lengths × two orientations:
+  `npm run render:all` → 81s `maalam-demo-landscape.mp4` (1920×1080) +
+  `maalam-demo-portrait.mp4` (1080×1920); `npm run render:60` → 60s
+  `maalam-demo-1min-*.mp4` pair (`npm run studio` to preview). Narration is
+  edge-tts in `public/audio/` (`public/audio/1min/` for the 60s cut, +15%
+  rate); scene timing lives in `src/script.ts` (81s) and `src/script60.ts`
+  (60s). Scenes adapt via `usePortrait()` in `src/theme.ts`. It is
+  excluded from root `tsconfig`/eslint.

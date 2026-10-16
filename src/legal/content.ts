@@ -24,11 +24,19 @@ export const PRIVACY_POLICY: LegalDoc = {
     {
       heading: 'Data stored on your device',
       body: [
-        'Your chat messages are saved in a local database on your phone. Images and voice messages you attach are stored in the app\'s private storage.',
+        'The text you scan and the AI verdicts are saved in a local database on your phone. Images and voice clips you attach are stored in the app\'s private storage.',
         'Your settings (nickname, theme, AI provider, model choice and system prompt) are saved locally.',
         'Your Gemini API key, if you enter one, is stored encrypted in Android secure storage.',
         'The local AI model file (about 2.6 GB) is saved in the app\'s private storage after you download it.',
-        'This data stays on your device until you clear the chat, use "Reset all data", or uninstall the app.',
+        'This data stays on your device until you clear your scans, use "Reset all data", or uninstall the app.',
+      ],
+    },
+    {
+      heading: 'Protected-app monitoring',
+      body: [
+        'If you choose apps to protect, an Accessibility service watches them while they are on screen and captures screenshots and visible text when the screen changes, so the AI can check them for deepfakes, AI-generated and harmful content.',
+        'When Cloud AI (Gemini) is selected, these screenshots and screen text are sent to Google to be analysed. When Local AI is selected, analysis stays on your device.',
+        'Captured frames are analysed and deleted right away. Only when something is flagged is the screenshot kept, in the app\'s private storage, as part of the detection record. You can delete individual detections or wipe them with "Reset all data".',
       ],
     },
     {
@@ -40,7 +48,7 @@ export const PRIVACY_POLICY: LegalDoc = {
     {
       heading: 'Cloud AI (Google Gemini)',
       body: [
-        'When you choose Cloud AI, your messages, any images or voice messages you attach, the chat history, the system prompt (which includes your nickname if you set one) and your API key are sent over an encrypted connection directly to Google\'s Gemini API to generate a reply.',
+        'When you choose Cloud AI, the text, images or voice clips you submit, the scan history, the system prompt (which includes your nickname if you set one) and your API key are sent over an encrypted connection directly to Google\'s Gemini API to generate a verdict.',
         'Google processes this data under its own terms and privacy policy. Avoid sending sensitive personal information to Cloud AI.',
       ],
     },
@@ -53,13 +61,13 @@ export const PRIVACY_POLICY: LegalDoc = {
     {
       heading: 'Backups',
       body: [
-        '"Back up data" creates a file with your chat and settings. Your API key, attached images, voice messages and the model file are not included. You choose where the file goes, and anyone who has the file can read your chat.',
+        '"Back up data" creates a file with your scans and settings. Your API key, attached images, voice clips and the model file are not included. You choose where the file goes, and anyone who has the file can read your scans.',
       ],
     },
     {
       heading: 'Your choices',
       body: [
-        'You can clear the chat at any time, reset all data from Settings, or uninstall the app to remove everything it stored.',
+        'You can clear your scans at any time, reset all data from Settings, or uninstall the app to remove everything it stored.',
       ],
     },
     {
@@ -86,13 +94,13 @@ export const TERMS: LegalDoc = {
     {
       heading: 'The app',
       body: [
-        'The app is an AI chat assistant. It can run the Gemma model on your device, or use Google Gemini with an API key that you provide.',
+        'Maalam is an AI-powered detector for deepfakes and harmful content. It can run the Gemma model on your device, or use Google Gemini with an API key that you provide.',
       ],
     },
     {
       heading: 'AI responses',
       body: [
-        'AI responses can be wrong, incomplete or inappropriate. They are not professional medical, legal, financial or other advice. Check important information yourself before relying on it.',
+        'AI verdicts can be wrong, incomplete or inappropriate. A "likely authentic" result does not prove an image is real, and a "harmful" flag is an assessment, not a fact. They are not professional medical, legal, financial or other advice. Check important information yourself before relying on it.',
       ],
     },
     {
@@ -118,7 +126,7 @@ export const TERMS: LegalDoc = {
     {
       heading: 'Your content',
       body: [
-        'Your chats belong to you and are stored only on your device. You are responsible for keeping backups. Data that is deleted or lost cannot be recovered by us.',
+        'Your scans belong to you and are stored only on your device. You are responsible for keeping backups. Data that is deleted or lost cannot be recovered by us.',
       ],
     },
     {

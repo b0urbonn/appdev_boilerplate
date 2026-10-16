@@ -73,7 +73,7 @@ function formatRemainingTime(seconds: number | null): string {
   return `${days} day ${hours % 24} hr remaining`;
 }
 
-/** Chatbot-only settings, opened from the gear in the chat. */
+/** Detector settings, opened from the gear in the scan screen. */
 export default function ChatSettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -94,7 +94,7 @@ export default function ChatSettingsScreen() {
   };
 
   const confirmClear = () => {
-    confirmAction('Clear chat?', 'All messages will be deleted.', 'Clear', async () => {
+    confirmAction('Clear scans?', 'All messages will be deleted.', 'Clear', async () => {
       await clearAllConversations();
       await releaseLocalConversation('main');
       router.back();
@@ -119,7 +119,7 @@ export default function ChatSettingsScreen() {
 
       {settings.provider === 'cloud' ? <CloudSection theme={theme} /> : <LocalSection theme={theme} />}
 
-      <Section title="System prompt" theme={theme}>
+      <Section title="Detection prompt" theme={theme}>
         <TextInput
           style={[
             styles.input,
@@ -131,13 +131,13 @@ export default function ChatSettingsScreen() {
           onChangeText={text => { setPromptDraft(text); setPromptSaved(false); }}
           editable={!savingPrompt}
           multiline
-          placeholder="You are a helpful assistant."
+          placeholder="Customize how Maalam analyzes content."
           placeholderTextColor={theme.textSecondary}
         />
         <Button label={promptSaved ? 'Saved' : 'Save'} icon={promptSaved ? 'checkmark' : 'save-outline'} onPress={savePrompt} loading={savingPrompt} disabled={promptDraft === settings.systemPrompt} style={{ marginTop: 12 }} />
       </Section>
 
-      <Button label="Clear chat" icon="trash-outline" variant="destructiveSecondary" onPress={confirmClear} style={{ marginTop: 8 }} />
+      <Button label="Clear scans" icon="trash-outline" variant="destructiveSecondary" onPress={confirmClear} style={{ marginTop: 8 }} />
     </ScrollView>
   );
 }

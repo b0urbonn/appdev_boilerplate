@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "Offline AI Starter",
-    "slug": "offline-ai-starter",
+    "name": "Maalam",
+    "slug": "maalam",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "offline-ai-starter",
+    "scheme": "maalam",
     "userInterfaceStyle": "automatic",
     "platforms": [
       "android",
       "web"
     ],
     "android": {
-      "package": "com.example.offlineaistarter",
+      "package": "com.maalam.app",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",

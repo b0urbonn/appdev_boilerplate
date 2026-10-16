@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  AppState,
+  Keyboard,
   KeyboardAvoidingView,
   StyleSheet,
   Text,
@@ -8,8 +10,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppPicker } from '@/components/AppPicker';
 import { Button } from '@/components/Button';
+import {
+  isMonitorServiceEnabled,
+  openAccessibilitySettings,
+  supportsScreenshots,
+} from '@/monitor/native';
 import { useSettings } from '@/settings/SettingsContext';
+import type { MonitoredApp } from '@/settings/storage';
 import { useTheme } from '@/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -17,41 +26,73 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 /** Intro slides. Edit, add or remove entries to change the onboarding. */
 const SLIDES: { icon: IconName; title: string; body: string }[] = [
   {
-    icon: 'sparkles-outline',
-    title: 'Welcome',
-    body: 'A starter app with an AI assistant built in. Make it your own.',
+    icon: 'shield-checkmark-outline',
+    title: 'Welcome to Maalam',
+    body: 'Check if an image is a deepfake and scan text or audio for harmful content — right from your phone.',
   },
   {
-    icon: 'cloud-offline-outline',
-    title: 'Offline first',
-    body: 'Your chats are saved on this phone and work without internet.',
+    icon: 'scan-outline',
+    title: 'Detect deepfakes',
+    body: 'Attach a photo and Maalam inspects it for AI-generation and manipulation artifacts, then gives you a verdict.',
   },
   {
-    icon: 'hardware-chip-outline',
-    title: 'Cloud or on-device AI',
-    body: 'Use Gemini with a free API key, or download Gemma to run AI fully on your phone.',
+    icon: 'warning-outline',
+    title: 'Spot harmful content',
+    body: 'Paste a message or record a voice clip to flag hate speech, threats, scams and other harmful content.',
+  },
+  {
+    icon: 'lock-closed-outline',
+    title: 'Private by design',
+    body: 'Your scans stay on this device. Use Gemini in the cloud, or download Gemma to analyze fully offline.',
   },
 ];
+
+// Every platform gets "choose apps to protect" and "turn on protection"
+// steps; on web they double as a preview of the monitor feature.
+const EXTRA_STEPS = 3;
 
 export default function OnboardingScreen() {
   const theme = useTheme();
   const { settings, update } = useSettings();
   const [step, setStep] = useState(0);
   const [nickname, setNickname] = useState(settings.nickname);
+  const [picked, setPicked] = useState<MonitoredApp[]>(settings.monitoredApps);
+  const [serviceOn, setServiceOn] = useState(false);
 
   const isNicknameStep = step === SLIDES.length;
+  const isAppsStep = step === SLIDES.length + 1;
+  const isProtectionStep = step === SLIDES.length + 2;
   const trimmed = nickname.trim();
+
+  // Re-check the accessibility toggle when the user returns from Settings.
+  useEffect(() => {
+    if (!isProtectionStep) return;
+    const refresh = () => setServiceOn(isMonitorServiceEnabled());
+    // Async so the initial read doesn't set state synchronously in the effect.
+    const timer = setTimeout(refresh, 0);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setServiceOn(isMonitorServiceEnabled());
+    });
+    return () => { clearTimeout(timer); sub.remove(); };
+  }, [isProtectionStep]);
 
   const finish = () => {
     update('nickname', trimmed);
+    update('monitoredApps', picked);
     // Flipping this flag makes the root layout switch to the main app.
     update('onboarded', true);
+  };
+
+  const next = () => {
+    // Drop the nickname keyboard so it can't cover the footer on later steps.
+    if (isNicknameStep) Keyboard.dismiss();
+    setStep(step + 1);
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
-        <View style={styles.content}>
+        <View style={isAppsStep ? styles.pickerContent : styles.content}>
           {isNicknameStep ? (
             <>
               <Ionicons name="person-circle-outline" size={88} color={theme.tint} />
@@ -70,7 +111,7 @@ export default function OnboardingScreen() {
                 autoFocus
                 maxLength={30}
                 returnKeyType="done"
-                onSubmitEditing={() => trimmed && finish()}
+                onSubmitEditing={() => trimmed && next()}
                 style={[
                   styles.input,
                   {
@@ -79,6 +120,44 @@ export default function OnboardingScreen() {
                     borderColor: theme.border,
                   },
                 ]}
+              />
+            </>
+          ) : isAppsStep ? (
+            <>
+              <Text style={[styles.title, { color: theme.text }]}>
+                Choose apps to protect
+              </Text>
+              <Text style={[styles.body, { color: theme.textSecondary }]}>
+                Maalam watches these apps in the background and warns you when it spots a deepfake, AI-generated or harmful content.
+              </Text>
+              <AppPicker selected={picked} onChange={setPicked} />
+            </>
+          ) : isProtectionStep ? (
+            <>
+              <Ionicons
+                name={serviceOn ? 'shield-checkmark' : 'shield-half-outline'}
+                size={88}
+                color={serviceOn ? theme.success : theme.tint}
+              />
+              <Text style={[styles.title, { color: theme.text }]}>
+                Turn on protection
+              </Text>
+              <Text style={[styles.body, { color: theme.textSecondary }]}>
+                Maalam uses an Accessibility service to see which protected app is open and capture its screen when it changes.
+                {supportsScreenshots()
+                  ? ' It only analyses the apps you picked.'
+                  : ' Image scanning needs Android 11 or later; on this device Maalam checks visible text instead.'}
+              </Text>
+              <Button
+                label={serviceOn ? 'Protection is on' : 'Open Accessibility settings'}
+                icon={serviceOn ? 'checkmark-circle-outline' : 'settings-outline'}
+                disabled={serviceOn}
+                onPress={() => {
+                  openAccessibilitySettings();
+                  // Web has no system settings screen to return from; the
+                  // stub flips the flag synchronously.
+                  setServiceOn(isMonitorServiceEnabled());
+                }}
               />
             </>
           ) : (
@@ -95,7 +174,7 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={styles.dots}>
-          {[...SLIDES, null].map((_, i) => (
+          {Array.from({ length: SLIDES.length + EXTRA_STEPS }).map((_, i) => (
             <View
               key={i}
               style={[
@@ -107,8 +186,26 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Button label={step > 0 ? 'Back' : 'Skip'} variant="secondary" onPress={() => setStep(step > 0 ? step - 1 : SLIDES.length)} />
-          <Button label={isNicknameStep ? 'Get started' : 'Next'} disabled={isNicknameStep && !trimmed} onPress={() => isNicknameStep ? finish() : setStep(step + 1)} />
+          {isAppsStep ? (
+            <>
+              <Button label="Skip for now" variant="secondary" onPress={next} />
+              <Button label="Next" disabled={picked.length === 0} onPress={next} />
+            </>
+          ) : isProtectionStep ? (
+            <>
+              <Button label="Later" variant="secondary" onPress={finish} />
+              <Button label="Get started" onPress={finish} />
+            </>
+          ) : (
+            <>
+              <Button label={step > 0 ? 'Back' : 'Skip'} variant="secondary" onPress={() => setStep(step > 0 ? step - 1 : SLIDES.length)} />
+              <Button
+                label="Next"
+                disabled={isNicknameStep && !trimmed}
+                onPress={next}
+              />
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -124,6 +221,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
     gap: 16,
+  },
+  pickerContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 32,
+    gap: 12,
   },
   title: { fontSize: 26, fontWeight: '700', textAlign: 'center' },
   body: { fontSize: 16, textAlign: 'center', lineHeight: 22 },

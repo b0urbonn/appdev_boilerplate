@@ -24,7 +24,7 @@ the previous device configuration on screen.
 
 ## Download and load
 
-1. Open Chat settings and choose **Local AI**.
+1. Open Detector settings and choose **Local AI**.
 2. Choose **Download model**. Pause keeps a partial download for resuming;
    cancel deletes the partial and downloaded model files.
 3. After the download completes, choose **Load model**. The initial engine
@@ -77,7 +77,7 @@ encoder model has to initialize.
 | Symptom | Check |
 | --- | --- |
 | Local AI is unavailable in the browser | Run the Android development build. |
-| Download is incomplete | Resume it from Chat settings; model files are stored in app-private storage. |
+| Download is incomplete | Resume it from Detector settings; model files are stored in app-private storage. |
 | Model load fails | Check total-RAM compatibility and free storage, then retry Auto or CPU. Runtime memory can differ by Android version and other running apps. |
 | Image or voice control is missing | Confirm **Local AI** is selected and update the development build so the Expo native module is installed. |
 | Audio decode fails | Try a shorter voice recording and confirm it plays in the chat. The recording must be in app-private storage. |

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="maalam_monitor_description">Maalam watches the apps you chose to protect. When the screen changes it captures what is shown and checks it for deepfakes, AI-generated and harmful content, then warns you with a floating indicator. Captured images are only kept when something is flagged.</string>
+</resources>

@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Animated,
-  Pressable,
-  type PressableProps,
-} from 'react-native';
-import { useReduceMotion } from './AccessibilityPreferences';
+import { Pressable, type PressableProps } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { SPRING } from '@/motion';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -18,22 +15,13 @@ export function SmoothPressable({
   accessibilityState,
   disabled,
   hitSlop = 8,
+  pressedScale = 0.97,
   ...props
-}: PressableProps) {
-  const reduceMotion = useReduceMotion();
-  const [scale] = useState(() => new Animated.Value(1));
+}: PressableProps & { pressedScale?: number }) {
+  const scale = useSharedValue(1);
   const [pressed, setPressed] = useState(false);
   const resolvedStyle = typeof style === 'function' ? style({ pressed }) : style;
-
-  const animate = (toValue: number) => {
-    if (reduceMotion) { scale.setValue(1); return; }
-    Animated.spring(scale, {
-      toValue,
-      speed: 38,
-      bounciness: 0,
-      useNativeDriver: true,
-    }).start();
-  };
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
 
   return (
     <AnimatedPressable
@@ -44,15 +32,15 @@ export function SmoothPressable({
       accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
       onPressIn={(event) => {
         setPressed(true);
-        animate(0.985);
+        scale.set(withSpring(pressedScale, SPRING));
         onPressIn?.(event);
       }}
       onPressOut={(event) => {
         setPressed(false);
-        animate(1);
+        scale.set(withSpring(1, SPRING));
         onPressOut?.(event);
       }}
-      style={[resolvedStyle, { transform: [{ scale }] }]}
+      style={[resolvedStyle, animatedStyle]}
     >
       {children}
     </AnimatedPressable>

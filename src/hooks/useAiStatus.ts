@@ -32,7 +32,7 @@ export function useAiStatus(): AiStatus {
   } else if (modelStatus.state === 'loading') {
     problem = 'Loading the local model...';
   } else if (modelStatus.state === 'downloaded') {
-    problem = 'Local model not loaded. Load it in Chat settings.';
+    problem = 'Local model not loaded. Load it in Detector settings.';
   } else if (modelStatus.state !== 'loaded') {
     problem = 'Local model not downloaded.';
   }

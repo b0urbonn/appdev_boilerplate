@@ -49,3 +49,6 @@ modules/**/android/.gradle/
 
 # env files
 .env
+
+# rendered demo video output
+demo-video/out/

@@ -7,7 +7,7 @@ content.
 
 ## API key and model selection
 
-Create a key in Google AI Studio and enter it in **Chat settings**. On Android,
+Create a key in Google AI Studio and enter it in **Detector settings**. On Android,
 the key is stored with Expo SecureStore. The key is not part of an app backup
 or source control. If a key is exposed, revoke it in AI Studio.
 
@@ -15,7 +15,7 @@ The model list is fetched from the account's `generateContent` catalog and
 cached for ten minutes. **Auto** selects a tier based on the current user
 message: Flash-Lite for short text, Flash for standard or media prompts, and
 Pro for complex or long prompts when the key's catalog includes those models.
-An individual model can also be selected in Chat settings.
+An individual model can also be selected in Detector settings.
 
 ## Automatic fallback
 

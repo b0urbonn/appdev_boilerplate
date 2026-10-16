@@ -14,5 +14,8 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
+  ],
+  "exclude": [
+    "demo-video"
   ]
 }

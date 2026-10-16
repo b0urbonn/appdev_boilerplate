@@ -1,8 +1,10 @@
-# Offline AI Starter
+# Maalam
 
-An Android-first Expo chatbot with on-device Gemma 4 E2B, cloud Gemini, and
-local SQLite conversation storage. The Android app uses native modules, so run
-it in a development build; Expo Go is not supported.
+An Android-first Expo app that detects deepfakes and harmful content. Attach an
+image for a manipulation scan, or submit text and voice clips to flag hate
+speech, threats, scams and more. Verdicts come from on-device Gemma 4 E2B or
+cloud Gemini, with local SQLite storage. The Android app uses native modules,
+so run it in a development build; Expo Go is not supported.
 
 ## Documentation
 
@@ -30,5 +32,5 @@ For the Expo tunnel, install a development APK first, then run:
 npx expo start --dev-client --tunnel
 ```
 
-The local Gemma model is downloaded separately from Chat settings. Setup,
+The local Gemma model is downloaded separately from Detector settings. Setup,
 cloud build and device requirements are in the [student guide](docs/GUIDE.md).

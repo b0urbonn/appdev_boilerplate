@@ -1,4 +1,4 @@
-# Student Guide: Offline AI Starter
+# Student Guide: Maalam
 
 This guide covers everything to do **before** you build your own project on
 this boilerplate: what you need, how to set up your computer, how to run the
@@ -234,7 +234,7 @@ name later means a new app on the phone.
 
 | What | File | Change |
 | --- | --- | --- |
-| App name on the phone | `app.json` > `expo.name` | `"Offline AI Starter"` → `"My Study Buddy"` |
+| App name on the phone | `app.json` > `expo.name` | `"Maalam"` → `"My Study Buddy"` |
 | Slug | `app.json` > `expo.slug` | `"my-study-buddy"` (lowercase, dashes) |
 | URL scheme | `app.json` > `expo.scheme` | `"my-study-buddy"` |
 | **Android package ID** | `app.json` > `expo.android.package` | `"com.yourname.mystudybuddy"` (must be unique, lowercase, no dashes) |
@@ -268,7 +268,7 @@ Open <http://localhost:8081>. Changes reload automatically.
 
 In the browser:
 - Onboarding, Home, Settings and **Gemini** chat work.
-- **Local AI does not work** (it needs the phone's hardware). Chat settings
+- **Local AI does not work** (it needs the phone's hardware). Detector settings
   shows a note instead.
 - The Gemini key is only kept for the current browser tab.
 
@@ -392,7 +392,7 @@ Skip this unless you want unlimited builds on your own PC.
 4. Chat, now fully offline. **Unload** frees memory; **Delete** frees
    storage.
 5. The app checks device hardware and uses total RAM for its compatibility
-   estimate. Select an available backend in Chat settings; CPU is the broadest
+   estimate. Select an available backend in Detector settings; CPU is the broadest
    compatibility option, while GPU or NPU may accelerate supported operations.
    A runtime allocation can still fail even when the total-RAM estimate passes.
 
@@ -400,7 +400,7 @@ Skip this unless you want unlimited builds on your own PC.
 
 The ring at the top of the chat fills up as the conversation gets longer.
 When it's full, the AI starts forgetting the oldest messages. Tap it for
-details. Clear the chat in Chat settings to start fresh.
+details. Clear the chat in Detector settings to start fresh.
 
 ---
 
@@ -440,7 +440,7 @@ This deletes everything (chat, settings, API key, local model).
 
 ### 8.3 Change how the AI behaves
 
-- **Personality/instructions**: edit the system prompt in Chat settings and
+- **Personality/instructions**: edit the system prompt in Detector settings and
   press **Save**. The default is in `src/settings/storage.ts`
   (`buildSystemPrompt()`).
 - **Use the AI in your own screen**: use `getProvider(settings)` from
@@ -512,7 +512,7 @@ cloud routing, and native hardware notes.
 - [ ] (Android) `npx expo start` running and the phone app connects
 - [ ] (Local AI) Model downloaded and loaded on a real phone
 - [ ] Checked no API key is written anywhere in the code
-- [ ] First commit: `git add . && git commit -m "Start from Offline AI Starter"`
+- [ ] First commit: `git add . && git commit -m "Start from Maalam"`
 
 ---
 
@@ -557,7 +557,7 @@ project.
 | Chat controls are hidden by the keyboard | Update `softwareKeyboardLayoutMode` in `app.json`; the chat uses keyboard avoidance and keeps its composer in one row. Rebuild the Android development client after changing native config. |
 | App opens in Expo Go and crashes | Expo Go isn't supported. Use your development build (section 6.2). |
 | Blank screen / stale code in browser | Stop the server and run `npx expo start --web --clear`. |
-| "Invalid API key" | Re-paste the key in Chat settings; set model to **Auto**. |
+| "Invalid API key" | Re-paste the key in Detector settings; set model to **Auto**. |
 | "Rate limit reached" | Free-tier limit; wait a minute and retry. |
 | Local AI unavailable in browser | Expected. Local AI only works in the Android app. |
 | Local model won't load / app closes | Check the total-RAM compatibility status, confirm the model finished downloading and retry with **Auto** or **CPU**. A runtime memory allocation can still fail. |

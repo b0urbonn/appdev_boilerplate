@@ -175,8 +175,8 @@ export function ChatInput({
                   disabled
                     ? 'Message…'
                     : imageUri || audio
-                      ? 'Add a message…'
-                      : 'Message…'
+                      ? 'Add a note…'
+                      : 'Paste content to check…'
                 }
                 placeholderTextColor={theme.textSecondary}
                 value={value}

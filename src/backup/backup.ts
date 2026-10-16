@@ -9,7 +9,7 @@ import type { MessageRow } from '@/db/messages';
 import { DEFAULT_SETTINGS, type Settings } from '@/settings/storage';
 import { readFile, saveFile } from './file';
 
-export const BACKUP_FORMAT = 'offline-ai-starter-backup';
+export const BACKUP_FORMAT = 'maalam-backup';
 export const BACKUP_VERSION = 1;
 
 /** Settings saved in a backup. The API key is never included. */
@@ -48,7 +48,7 @@ export async function exportBackup(settings: Settings): Promise<number> {
   };
   const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
   await saveFile(
-    `offline-ai-backup-${date}.json`,
+    `maalam-backup-${date}.json`,
     JSON.stringify(backup, null, 2)
   );
   return messages.length;

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, {
   useCallback,
   useEffect,
@@ -57,18 +57,21 @@ const id = 'main';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-/** Starter prompts shown on an empty chat. Edit these for your app. */
+/** Starter prompts shown on an empty scan. Edit these for your app. */
 export const SUGGESTIONS: { icon: IconName; label: string; prompt: string }[] = [
-  { icon: 'bulb-outline', label: 'Explain a topic', prompt: 'Explain photosynthesis in simple terms.' },
-  { icon: 'help-circle-outline', label: 'Quiz me', prompt: 'Give me a 5-question quiz about world geography.' },
-  { icon: 'calendar-outline', label: 'Plan my study week', prompt: 'Help me make a study plan for this week.' },
-  { icon: 'create-outline', label: 'Improve my writing', prompt: 'Help me improve this paragraph: ' },
+  { icon: 'image-outline', label: 'Check an image', prompt: 'Is this image a deepfake or AI-generated? List the artifacts you see.' },
+  { icon: 'document-text-outline', label: 'Check a message', prompt: 'Check this content for harmful material: ' },
+  { icon: 'mic-outline', label: 'Check a voice clip', prompt: 'Analyze this recording: does the voice sound synthetic, and is the content harmful?' },
+  { icon: 'help-circle-outline', label: 'Spot the signs', prompt: 'What are the telltale signs of a deepfake image?' },
 ];
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const router = useRouter();
+  // Home tiles can deep-link here: ?attach=image opens the gallery picker,
+  // ?prompt=... pre-fills the input.
+  const params = useLocalSearchParams<{ attach?: string; prompt?: string }>();
   const { settings, ready } = useSettings();
   const { problem, modelStatus } = useAiStatus();
 
@@ -206,6 +209,25 @@ export default function ChatScreen() {
     }
   }, []);
 
+  // Consume deep-link params once, then clear them so the same link works
+  // again. Deferred so the screen is mounted before the picker opens.
+  const paramsHandledRef = useRef(false);
+  useEffect(() => {
+    const { attach, prompt } = params;
+    if (!attach && !prompt) {
+      paramsHandledRef.current = false;
+      return;
+    }
+    if (paramsHandledRef.current) return;
+    const timer = setTimeout(() => {
+      paramsHandledRef.current = true;
+      if (prompt) setInput(prompt);
+      if (attach === 'image') void attachImage();
+      router.setParams({ attach: '', prompt: '' });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [params, attachImage, router]);
+
   const startRecording = useCallback(() => {
     voice.start().catch((e) => showMessage('Unable to record', e instanceof Error ? e.message : 'Please try again.'));
   }, [voice]);
@@ -325,7 +347,7 @@ export default function ChatScreen() {
   }, []);
 
   const clearChat = useCallback(() => {
-    confirmAction('Clear chat?', 'All messages will be deleted and the AI memory reset.', 'Clear', async () => {
+    confirmAction('Clear scans?', 'All messages will be deleted and the AI memory reset.', 'Clear', async () => {
       await clearAllConversations();
       await releaseLocalConversation(id);
       await ensureConversation(id);
@@ -369,7 +391,7 @@ export default function ChatScreen() {
   const pendingLabel =
     provider?.id === 'local' && modelStatus.state !== 'loaded'
       ? 'Loading model...'
-      : 'Generating...';
+      : 'Analyzing...';
 
   // Status dot + line under the title: green when ready, amber while the
   // local model is loading/downloading, red otherwise.
@@ -396,7 +418,7 @@ export default function ChatScreen() {
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
         <IconButton icon="chevron-back" label="Back to Home" onPress={() => router.navigate('/' as Href)} />
         <View style={styles.flex}>
-          <Text style={[styles.title, { color: theme.text }]}>AI Chat</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Maalam</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 12 }}>
@@ -405,20 +427,20 @@ export default function ChatScreen() {
           </View>
         </View>
         <ContextRing usage={context} theme={theme} />
-        <IconButton icon="trash-outline" label="Clear chat" onPress={clearChat} disabled={generating || messages.length === 0} />
-        <IconButton icon="settings-outline" label="Chat settings" onPress={openSettings} />
+        <IconButton icon="trash-outline" label="Clear scans" onPress={clearChat} disabled={generating || messages.length === 0} />
+        <IconButton icon="settings-outline" label="Detector settings" onPress={openSettings} />
       </View>
       {banner}
       {messages.length === 0 ? (
         <View style={styles.empty}>
           <View style={[styles.emptyAvatar, { backgroundColor: theme.buttonPrimary }]}>
-            <Ionicons name="sparkles" size={30} color="#FFF" />
+            <Ionicons name="shield-checkmark" size={30} color="#FFF" />
           </View>
           <Text style={[styles.emptyTitle, { color: theme.text }]}>
-            Hi {settings.nickname || 'there'}, how can I help?
+            What should I check{settings.nickname ? `, ${settings.nickname}` : ''}?
           </Text>
           <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
-            Ask anything. Your chat is saved on this device.
+            Attach an image to scan for deepfakes, or paste text to check for harmful content. Scans are saved on this device.
           </Text>
           <View style={styles.chips}>
             {SUGGESTIONS.map((s) => (

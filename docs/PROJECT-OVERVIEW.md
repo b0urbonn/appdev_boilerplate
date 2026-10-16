@@ -1,10 +1,10 @@
-# Offline AI Starter
+# Maalam
 
 A small, readable Android chatbot app you can build on. It is
 **offline-first**: every conversation lives in a local SQLite database, so
 browsing, creating, and reading chats works with no network at all.
 
-Two AI providers are included and can be switched in **Chat settings** (gear icon in the chat):
+Two AI providers are included and can be switched in **Detector settings** (gear icon in the chat):
 
 - **Cloud** — Google Gemini, streamed over plain HTTPS (no SDK). Needs a
   free API key.
@@ -61,7 +61,7 @@ export ANDROID_HOME=$HOME/Library/Android/sdk   # Android Studio default
 ### Cloud provider (Gemini)
 
 1. Get a free API key: <https://aistudio.google.com/apikey>
-2. In the app: **Chat settings > AI provider** dropdown, choose **Cloud AI
+2. In the app: **Detector settings > AI provider** dropdown, choose **Cloud AI
    (Gemini)** and paste the key. The model
    list loads automatically. **Auto** chooses a suitable available model for
    the request and can fall back when a model is unavailable or rate limited.
@@ -71,7 +71,7 @@ export ANDROID_HOME=$HOME/Library/Android/sdk   # Android Studio default
 
 ### Local provider (Gemma 4 E2B)
 
-1. **Chat settings > AI provider** dropdown: choose **Local AI (Gemma 4 E2B)**.
+1. **Detector settings > AI provider** dropdown: choose **Local AI (Gemma 4 E2B)**.
    Only the local options are shown.
 2. Tap **Download model**. ~2.6 GB, use Wi-Fi. Downloads can be cancelled and
    resumed; the file only counts as ready once fully downloaded (it is
@@ -172,7 +172,7 @@ Sending a message:
    `error` ("Generation interrupted").
 
 The app has one chat (conversation id `main`); there is no chat history
-list. "Clear chat" in Chat settings deletes its messages.
+list. "Clear chat" in Detector settings deletes its messages.
 
 ### Adding a new AI provider
 
@@ -193,7 +193,7 @@ Edit `android.package` in `app.json` (currently
 | Problem | Fix |
 | --- | --- |
 | "Free-tier rate limit reached" | Wait ~a minute; retry by tapping the errored message. |
-| "Invalid API key or model" | Re-check the key in Chat settings, or choose "Auto (best available)" as the model. |
+| "Invalid API key or model" | Re-check the key in Detector settings, or choose "Auto (best available)" as the model. |
 | Local model load fails | Check the device's total-RAM compatibility estimate, close other apps, and try another detected backend. Runtime memory needs vary; total RAM is an estimate, not a guarantee. |
 | Local AI won't run on emulator | LiteRT-LM is ARM-only — use a physical ARM device. |
 | `npm install` fails on litert-lm postinstall | It tries to fetch iOS frameworks; run `SKIP_IOS_FRAMEWORK_DOWNLOAD=1 npm install`. |

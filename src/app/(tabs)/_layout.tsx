@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReduceMotion } from '@/components/AccessibilityPreferences';
 import { FloatingTabBar, TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
 import { useTheme } from '@/theme';
 
@@ -19,13 +20,15 @@ function tabIcon(filled: IconName, outline: IconName) {
 export default function TabLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   return (
     <Tabs
-      // Floating pill (Home + empty feature slots) with a separate Chat
-      // button; see src/components/FloatingTabBar.tsx.
+      // Floating pill for Home, Scan, History and Learn. Chat is a global FAB.
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        // Screens shift sideways a little when switching tabs.
+        animation: reduceMotion ? 'none' : 'shift',
         // No header, so keep content below the status bar; leave room at the
         // bottom so the floating bar doesn't cover the screen's content.
         sceneStyle: {
@@ -40,8 +43,21 @@ export default function TabLayout() {
         options={{ title: 'Home', tabBarIcon: tabIcon('home', 'home-outline') }}
       />
       <Tabs.Screen
+        name="scan"
+        options={{ title: 'Scan', tabBarIcon: tabIcon('scan', 'scan-outline') }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{ title: 'History', tabBarIcon: tabIcon('time', 'time-outline') }}
+      />
+      <Tabs.Screen
+        name="learn"
+        options={{ title: 'Learn', tabBarIcon: tabIcon('school', 'school-outline') }}
+      />
+      <Tabs.Screen
         name="chat"
         options={{
+          href: null,
           title: 'Chat',
           sceneStyle: { backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom },
           tabBarIcon: tabIcon('chatbubble-ellipses', 'chatbubble-ellipses-outline'),

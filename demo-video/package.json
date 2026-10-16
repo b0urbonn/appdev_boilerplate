@@ -1,0 +1,26 @@
+{
+  "name": "maalam-demo-video",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render Demo out/maalam-demo.mp4",
+    "render:landscape": "remotion render Demo out/maalam-demo-landscape.mp4",
+    "render:portrait": "remotion render DemoPortrait out/maalam-demo-portrait.mp4",
+    "render:all": "npm run render:landscape && npm run render:portrait",
+    "render:60:landscape": "remotion render Demo60 out/maalam-demo-1min-landscape.mp4",
+    "render:60:portrait": "remotion render Demo60Portrait out/maalam-demo-1min-portrait.mp4",
+    "render:60": "npm run render:60:landscape && npm run render:60:portrait"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "@remotion/google-fonts": "4.0.534",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.534"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

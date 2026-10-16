@@ -19,6 +19,38 @@ async function toDataUrl(uri: string): Promise<string> {
  * Pick one image from the browser's file chooser.
  * Returns a data URL, or null if the user cancelled.
  */
+export type AttachmentKind = 'image' | 'audio' | 'video';
+
+/** Pick a video clip through the browser's file chooser. */
+export async function pickVideo(): Promise<{ uri: string; name: string; size: number } | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'] });
+  if (result.canceled || result.assets.length === 0) return null;
+  const asset = result.assets[0];
+  return {
+    uri: await toDataUrl(asset.uri),
+    name: asset.fileName ?? 'video',
+    size: asset.fileSize ?? 0,
+  };
+}
+
+/** Pick an audio file through the browser's file chooser. */
+export async function pickAudioFile(): Promise<{ uri: string; name: string; size: number } | null> {
+  const DocumentPicker = await import('expo-document-picker');
+  const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*' });
+  if (result.canceled || result.assets.length === 0) return null;
+  const asset = result.assets[0];
+  return {
+    uri: await toDataUrl(asset.uri),
+    name: asset.name ?? 'audio',
+    size: asset.size ?? 0,
+  };
+}
+
+/** Scan media is a data URL; the id is ignored on web. */
+export async function copyIntoScans(from: string, _id: string): Promise<string> {
+  return from;
+}
+
 export async function pickImage(): Promise<string | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
@@ -49,3 +81,5 @@ export async function readAttachmentBase64(
 
 /** Nothing to clean up on web - attachments live inside the database rows. */
 export async function deleteAllAttachments(): Promise<void> {}
+
+export async function deleteAllScanMedia(): Promise<void> {}
