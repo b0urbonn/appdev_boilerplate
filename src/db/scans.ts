@@ -1,7 +1,9 @@
 // Manual scan results staged on the Scan tab. Media lives in
 // documentDirectory/scans/ so "Clear chat" (attachments/) doesn't wipe it.
 import { deleteAllScanMedia } from '@/attachments/files';
+import { isOwnedMediaFile } from '@/attachments/ownedFile';
 import { getDb } from '@/db/client';
+import { deleteFindingCrops } from '@/attachments/regionCrops';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { MonitorFinding } from '@/monitor/native';
 
@@ -79,17 +81,20 @@ export async function getScan(id: string): Promise<Scan | null> {
 
 export async function deleteScan(id: string): Promise<void> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ media_uri: string | null }>(
-    'SELECT media_uri FROM scans WHERE id = ?', id
+  const row = await db.getFirstAsync<{ media_uri: string | null; findings: string }>(
+    'SELECT media_uri, findings FROM scans WHERE id = ?', id
   );
-  if (row?.media_uri) {
+  if (row?.media_uri && isOwnedMediaFile(row.media_uri, `${FileSystem.documentDirectory}scans/`)) {
     await FileSystem.deleteAsync(row.media_uri, { idempotent: true }).catch(() => {});
   }
   await db.runAsync('DELETE FROM scans WHERE id = ?', id);
+  if (row) { try { await deleteFindingCrops(JSON.parse(row.findings)); } catch {} }
 }
 
 export async function clearAllScans(): Promise<void> {
   const db = await getDb();
+  const cropRows = await db.getAllAsync<{ findings: string }>('SELECT findings FROM scans');
   await db.runAsync('DELETE FROM scans');
+  for (const row of cropRows) { try { await deleteFindingCrops(JSON.parse(row.findings)); } catch {} }
   await deleteAllScanMedia();
 }

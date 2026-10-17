@@ -1,8 +1,8 @@
 // Web/preview surface that mirrors the Android MaalamMonitorService overlay:
-// draggable bubble, alert bar and detection popup over a fake app feed.
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+// draggable bubble, alert bar and detection popup over a fake app feed or live video call.
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { QuickChatPanel } from '@/components/QuickChatPanel';
 import { Button } from '@/components/Button';
 import { SmoothPressable } from '@/components/SmoothPressable';
 import { useReduceMotion } from '@/components/AccessibilityPreferences';
@@ -44,22 +45,31 @@ export default function MonitorPreviewScreen() {
   const router = useRouter();
   const { settings } = useSettings();
   const reduceMotion = useReduceMotion();
+  const params = useLocalSearchParams<{ app?: string; autoScan?: string }>();
+
+  const appLabel = params.app || 'Google Meet';
+  const isVideoCall =
+    !params.app ||
+    ['meet', 'zoom', 'whatsapp', 'telegram', 'teams', 'call', 'stream', 'screen', 'discord', 'video'].some(
+      (k) => appLabel.toLowerCase().includes(k)
+    );
 
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<DemoResult | null>(null);
   const [barVisible, setBarVisible] = useState(false);
   const [popupVisible, setPopupVisible] = useState(false);
+  const [chatVisible, setChatVisible] = useState(false);
 
   const [pos] = useState(() => new Animated.ValueXY({ x: FRAME_W - BUBBLE - 8, y: 200 }));
   const [pulse] = useState(() => new Animated.Value(1));
   const barTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Draggable bubble; snap to the nearest frame edge on release.
-  // Stable mutable box for the drag origin (not a ref: handlers only).
   const [drag] = useState(() => ({ x: 0, y: 0 }));
   const [pan] = useState(() =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) + Math.abs(g.dy) > 8,
       onPanResponderMove: (_, g) => {
         pos.setValue({
           x: Math.max(0, Math.min(FRAME_W - BUBBLE, drag.x + g.dx)),
@@ -73,7 +83,10 @@ export default function MonitorPreviewScreen() {
         });
       },
       onPanResponderGrant: () => {
-        pos.stopAnimation((v) => { drag.x = v.x; drag.y = v.y; });
+        pos.stopAnimation((v) => {
+          drag.x = v.x;
+          drag.y = v.y;
+        });
       },
     })
   );
@@ -87,42 +100,96 @@ export default function MonitorPreviewScreen() {
       ])
     );
     animation.start();
-    return () => { animation.stop(); pulse.setValue(1); };
+    return () => {
+      animation.stop();
+      pulse.setValue(1);
+    };
   }, [scanning, reduceMotion, pulse]);
 
-  useEffect(() => () => { if (barTimer.current) clearTimeout(barTimer.current); }, []);
+  useEffect(() => () => {
+    if (barTimer.current) clearTimeout(barTimer.current);
+  }, []);
 
   const simulateScan = () => {
     setScanning(true);
     setTimeout(() => setScanning(false), 1500);
   };
 
-  const simulateDetection = async () => {
+  const simulateDetection = useCallback(async () => {
     setScanning(true);
     const detectionId = newId();
-    const demo: DemoResult = {
-      detectionId,
-      verdict: 'deepfake',
-      confidence: 87,
-      summary:
-        'The face in this video shows face-swap blending artifacts and the caption pushes a false claim. Treat this clip as likely AI-manipulated.',
-      findings: [
-        { category: 'deepfake', label: 'Face-swap artifacts', confidence: 87, description: 'Blurred edges and inconsistent lighting around the face suggest a swapped face.' },
-        { category: 'ai_generated', label: 'AI-generated background', confidence: 72, description: 'The background contains warped text and repeating patterns typical of generated imagery.' },
-        { category: 'harmful', label: 'Misleading caption', confidence: 64, description: 'The caption presents a fabricated clip as a real leaked video.' },
-      ],
-    };
+    const demo: DemoResult = isVideoCall
+      ? {
+          detectionId,
+          verdict: 'deepfake',
+          confidence: 91,
+          summary:
+            'Live video call analysis detected real-time face-swap blending and synthetic audio sync anomalies. High likelihood of AI manipulation.',
+          findings: [
+            {
+              category: 'deepfake',
+              label: 'Face-swap boundary blending',
+              confidence: 92,
+              description:
+                'Temporal flickering and unnatural skin texture boundaries around the jawline and eyes.',
+            },
+            {
+              category: 'harmful',
+              label: 'Audio-visual lip-sync delay',
+              confidence: 88,
+              description:
+                'Voice phonemes desynchronized from lip movements by ~190ms, characteristic of live speech synthesis.',
+            },
+            {
+              category: 'ai_generated',
+              label: 'Synthetic facial micro-expression',
+              confidence: 84,
+              description:
+                'Blinking frequency and gaze tracking do not match natural human conversational cadence.',
+            },
+          ],
+        }
+      : {
+          detectionId,
+          verdict: 'deepfake',
+          confidence: 87,
+          summary:
+            'The face in this video shows face-swap blending artifacts and the caption pushes a false claim. Treat this clip as likely AI-manipulated.',
+          findings: [
+            {
+              category: 'deepfake',
+              label: 'Face-swap artifacts',
+              confidence: 87,
+              description:
+                'Blurred edges and inconsistent lighting around the face suggest a swapped face.',
+            },
+            {
+              category: 'ai_generated',
+              label: 'AI-generated background',
+              confidence: 72,
+              description:
+                'The background contains warped text and repeating patterns typical of generated imagery.',
+            },
+            {
+              category: 'harmful',
+              label: 'Misleading caption',
+              confidence: 64,
+              description: 'The caption presents a fabricated clip as a real leaked video.',
+            },
+          ],
+        };
+
     try {
       await insertDetection({
         id: detectionId,
-        packageName: 'com.zhiliaoapp.musically',
-        appLabel: 'TikTok',
+        packageName: isVideoCall ? 'com.google.android.apps.tachyon' : 'com.zhiliaoapp.musically',
+        appLabel,
         verdict: 'deepfake',
-        confidence: 87,
+        confidence: demo.confidence,
         summary: demo.summary,
         findings: demo.findings,
         screenshotUri: null,
-        screenText: DEMO_POSTS.map((p) => p.caption).join('\n'),
+        screenText: isVideoCall ? 'Incoming Live Video Call Stream' : DEMO_POSTS.map((p) => p.caption).join('\n'),
         provider: settings.provider,
         createdAt: Date.now(),
       });
@@ -136,7 +203,17 @@ export default function MonitorPreviewScreen() {
       if (barTimer.current) clearTimeout(barTimer.current);
       barTimer.current = setTimeout(() => setBarVisible(false), 8000);
     }, 1500);
-  };
+  }, [appLabel, isVideoCall, settings.provider]);
+
+  // Auto-trigger detection when launched via Live Scan
+  useEffect(() => {
+    if (params.autoScan === 'true') {
+      const timer = setTimeout(() => {
+        void simulateDetection();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [params.autoScan, simulateDetection]);
 
   const openPopup = () => result && setPopupVisible(true);
   const dismissPopup = () => {
@@ -144,23 +221,116 @@ export default function MonitorPreviewScreen() {
     setResult(null);
   };
 
-  const bubbleColor = result ? ALERT_RED : IDLE_BLUE;
+  const bubbleColor = scanning ? '#7C3AED' : result ? ALERT_RED : IDLE_BLUE;
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      {/* Fake protected app */}
+      {/* Top Navigation bar */}
+      <View style={styles.topNav}>
+        <SmoothPressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to scan"
+          onPress={() => router.back()}
+          style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+        >
+          <Ionicons name="chevron-back" size={18} color={theme.text} />
+          <Text style={[styles.backBtnText, { color: theme.text }]}>Back to Scan</Text>
+        </SmoothPressable>
+        <Text style={[styles.topNavTitle, { color: theme.textSecondary }]}>
+          Live Video Call & Overlay Simulation
+        </Text>
+      </View>
+
+      <QuickChatPanel visible={chatVisible} onClose={() => setChatVisible(false)} />
+
+      {/* Frame simulating monitored app screen */}
       <View style={[styles.frame, { borderColor: theme.border }]}>
+        {/* App Title Bar */}
         <View style={styles.appHeader}>
-          <Text style={styles.appTitle}>TikTok</Text>
-        </View>
-        {DEMO_POSTS.map((post, i) => (
-          <View key={i} style={styles.post}>
-            <View style={styles.postImage}>
-              <Ionicons name="image-outline" size={40} color="#9A9AA3" />
+          <Text style={styles.appTitle}>{appLabel}</Text>
+          {isVideoCall && (
+            <View style={styles.callBadge}>
+              <View style={styles.callDot} />
+              <Text style={styles.callDuration}>01:24</Text>
             </View>
-            <Text style={styles.postCaption} numberOfLines={2}>{post.caption}</Text>
+          )}
+        </View>
+
+        {isVideoCall ? (
+          /* Live Video Call Screen Simulation */
+          <View style={styles.videoCallBody}>
+            {/* Caller Video Stream Box */}
+            <View style={styles.callerVideoBox}>
+              {/* Face Tracking HUD / Scanning Mesh */}
+              <View
+                style={[
+                  styles.faceScanHud,
+                  {
+                    borderColor: scanning ? '#7C3AED' : result ? ALERT_RED : '#2E7D32',
+                  },
+                ]}
+              >
+                <View style={styles.hudCornerTL} />
+                <View style={styles.hudCornerTR} />
+                <View style={styles.hudCornerBL} />
+                <View style={styles.hudCornerBR} />
+                <Ionicons
+                  name={result ? 'warning' : 'person'}
+                  size={76}
+                  color={result ? ALERT_RED : '#555566'}
+                />
+                <Text
+                  style={[
+                    styles.hudLabel,
+                    {
+                      color: scanning ? '#7C3AED' : result ? ALERT_RED : '#2E7D32',
+                    },
+                  ]}
+                >
+                  {scanning
+                    ? 'AI: TRACKING FACE MESH & SPEECH CADENCE'
+                    : result
+                    ? 'DEFECT FLAGGED: FACE-SWAP ARTIFACTS'
+                    : 'LIVE STREAM VERIFIED'}
+                </Text>
+              </View>
+
+              {/* Caller Identification Tag */}
+              <View style={styles.callerTag}>
+                <Text style={styles.callerName}>Active Video Caller</Text>
+                <Text style={styles.callerSub}>Live 1080p stream</Text>
+              </View>
+            </View>
+
+            {/* In-Call Controls Strip */}
+            <View style={styles.callControlsStrip}>
+              <View style={styles.controlCircle}>
+                <Ionicons name="mic" size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.controlCircle}>
+                <Ionicons name="videocam" size={20} color="#FFFFFF" />
+              </View>
+              <View style={styles.controlCircle}>
+                <Ionicons name="volume-high" size={20} color="#FFFFFF" />
+              </View>
+              <View style={[styles.controlCircle, styles.endCallCircle]}>
+                <Ionicons name="call" size={20} color="#FFFFFF" />
+              </View>
+            </View>
           </View>
-        ))}
+        ) : (
+          /* Feed Post Simulation (e.g. TikTok) */
+          DEMO_POSTS.map((post, i) => (
+            <View key={i} style={styles.post}>
+              <View style={styles.postImage}>
+                <Ionicons name="image-outline" size={40} color="#9A9AA3" />
+              </View>
+              <Text style={styles.postCaption} numberOfLines={2}>
+                {post.caption}
+              </Text>
+            </View>
+          ))
+        )}
 
         {/* Alert bar */}
         {barVisible && (
@@ -185,17 +355,26 @@ export default function MonitorPreviewScreen() {
         >
           <SmoothPressable
             accessibilityRole="button"
-            accessibilityLabel="Maalam monitor"
-            onPress={openPopup}
+            accessibilityLabel={`Maalam ${
+              scanning ? 'scanning' : result ? 'content flagged' : 'running'
+            }. Open chat`}
+            onPress={() => setChatVisible(true)}
             style={styles.bubbleTap}
           >
-            <Text style={styles.bubbleGlyph}>🛡</Text>
+            <Text style={styles.bubbleGlyph}>{scanning ? '⟳' : result ? '!' : '🛡'}</Text>
           </SmoothPressable>
         </Animated.View>
 
+        <Text style={[styles.monitorStatus, { left: 0 }]} accessibilityLiveRegion="polite">
+          {scanning
+            ? 'Scanning live video stream…'
+            : result
+            ? 'Defect flagged · tap the alert to view'
+            : 'Live call protection active · tap circle to chat'}
+        </Text>
+
         {/* Popup */}
         {popupVisible && result && (
-          // Scrim and card are siblings so no pressable contains another.
           <View style={styles.popupWrap} pointerEvents="box-none">
             <SmoothPressable
               style={styles.scrim}
@@ -205,10 +384,12 @@ export default function MonitorPreviewScreen() {
             />
             <View style={styles.card}>
               <Text style={styles.cardTitle}>
-                Deepfake, AI-generated or harmful content detected
+                {isVideoCall
+                  ? 'Deepfake or AI-manipulated video call detected'
+                  : 'Deepfake, AI-generated or harmful content detected'}
               </Text>
               <Text style={styles.cardSubtitle}>
-                TikTok · {result.confidence}% confidence
+                {appLabel} · {result.confidence}% confidence
               </Text>
               {result.findings.map((f, i) => (
                 <View key={i} style={{ marginTop: 8 }}>
@@ -237,29 +418,186 @@ export default function MonitorPreviewScreen() {
 
       <View style={styles.controls}>
         <Button label="Simulate scan" variant="secondary" onPress={simulateScan} />
-        <Button label="Simulate detection" onPress={() => void simulateDetection()} />
+        <Button label="Simulate defect detection" onPress={() => void simulateDetection()} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, alignItems: 'center', paddingVertical: 24, gap: 16 },
+  screen: { flex: 1, alignItems: 'center', paddingVertical: 16, gap: 12 },
+  topNav: {
+    width: FRAME_W,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  topNavTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
   frame: {
     width: FRAME_W,
     height: FRAME_H,
     borderWidth: 1,
     borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0C0D12',
   },
   appHeader: {
-    paddingVertical: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#2C2D35',
+    backgroundColor: '#161720',
   },
-  appTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
+  appTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  callBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(235, 75, 75, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  callDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5484D',
+  },
+  callDuration: {
+    color: '#FF8885',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  videoCallBody: {
+    flex: 1,
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  callerVideoBox: {
+    flex: 1,
+    backgroundColor: '#1C1D26',
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  faceScanHud: {
+    width: 170,
+    height: 190,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    padding: 8,
+  },
+  hudCornerTL: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    width: 16,
+    height: 16,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: '#00AC47',
+  },
+  hudCornerTR: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderColor: '#00AC47',
+  },
+  hudCornerBL: {
+    position: 'absolute',
+    bottom: -2,
+    left: -2,
+    width: 16,
+    height: 16,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: '#00AC47',
+  },
+  hudCornerBR: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderColor: '#00AC47',
+  },
+  hudLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  callerTag: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  callerName: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  callerSub: {
+    color: '#9A9AA3',
+    fontSize: 10,
+  },
+  callControlsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 14,
+  },
+  controlCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#2A2C38',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endCallCircle: {
+    backgroundColor: '#E5484D',
+    transform: [{ rotate: '135deg' }],
+  },
   post: { padding: 12, gap: 8 },
   postImage: {
     height: 220,
@@ -268,7 +606,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  postCaption: { fontSize: 14, color: '#333' },
+  postCaption: { fontSize: 14, color: '#FFFFFF' },
   alertBar: {
     position: 'absolute',
     top: 0,
@@ -278,7 +616,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  alertText: { color: '#FFFFFF', fontSize: 14 },
+  alertText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   bubble: {
     position: 'absolute',
     top: 0,
@@ -294,6 +632,7 @@ const styles = StyleSheet.create({
   },
   bubbleTap: { flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%' },
   bubbleGlyph: { fontSize: 26 },
+  monitorStatus: { position: 'absolute', bottom: 12, right: 0, textAlign: 'center', fontSize: 12, color: '#A0B4C8' },
   popupWrap: {
     position: 'absolute',
     top: 0,
@@ -310,7 +649,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
   card: {
     backgroundColor: '#FFFFFF',

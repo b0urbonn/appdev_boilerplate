@@ -1,17 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import { useRouter, type Href } from 'expo-router';
-import React, { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { deleteModel } from '@/ai/local';
 import { exportBackup, pickBackup, restoreBackup } from '@/backup/backup';
 import { Button } from '@/components/Button';
+import { AnimatedSwitch } from '@/components/AnimatedSwitch';
 import { Section } from '@/components/Section';
 import { SmoothPressable } from '@/components/SmoothPressable';
 import { clearAllConversations } from '@/db/conversations';
 import { clearAllDetections } from '@/db/detections';
 import { clearAllScans } from '@/db/scans';
-import { getDeviceSecurityLevel } from '@/security/deviceAuthentication';
+import { authenticateWithDevice, getDeviceSecurityLevel } from '@/security/deviceAuthentication';
 import { useSettings } from '@/settings/SettingsContext';
 import type { ThemeMode } from '@/settings/storage';
 import { useTheme, type Theme } from '@/theme';
@@ -27,9 +28,10 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { settings, update, reset } = useSettings();
-  const [nicknameDraft, setNicknameDraft] = useState(settings.nickname);
   const [busy, setBusy] = useState(false);
   const [checkingAppLock, setCheckingAppLock] = useState(false);
+  const appLockRequest = useRef(false);
+  const [appLockNotice, setAppLockNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<{ text: string; error: boolean } | null>(null);
 
   const run = async (job: () => Promise<string>) => {
@@ -52,13 +54,15 @@ export default function SettingsScreen() {
     run(async () => `Backup created (${await exportBackup(settings)} messages).`);
 
   const setAppLockEnabled = async (enabled: boolean) => {
-    if (checkingAppLock) return;
+    if (appLockRequest.current) return;
     if (Platform.OS !== 'android') {
       showMessage('Android only', 'App lock is available on Android devices.');
       return;
     }
 
+    appLockRequest.current = true;
     setCheckingAppLock(true);
+    setAppLockNotice(null);
     try {
       if (!enabled) {
         await update('appLockEnabled', false);
@@ -72,13 +76,24 @@ export default function SettingsScreen() {
         );
         return;
       }
+      // The setting stays off until Android confirms biometrics or the device credential.
+      const result = await authenticateWithDevice('enable');
+      if (!result.success) {
+        const cancelled = ['user_cancel', 'system_cancel', 'app_cancel'].includes(result.error);
+        setAppLockNotice(cancelled
+          ? 'Authentication cancelled. App lock is still off.'
+          : 'Identity could not be confirmed. App lock is still off. Try again.');
+        return;
+      }
       await update('appLockEnabled', true);
+      setAppLockNotice('Identity confirmed. App lock is enabled.');
     } catch (error) {
       showMessage(
         'Could not change app lock',
         error instanceof Error ? error.message : 'Check your phone’s security settings and try again.'
       );
     } finally {
+      appLockRequest.current = false;
       setCheckingAppLock(false);
     }
   };
@@ -100,7 +115,6 @@ export default function SettingsScreen() {
             setBusy(true);
             try {
               await restoreBackup(b, update);
-              setNicknameDraft(b.settings.nickname ?? '');
               setStatus({ text: 'Backup restored.', error: false });
             } catch (e) {
               setStatus({
@@ -127,10 +141,20 @@ export default function SettingsScreen() {
       'This deletes your scans, nickname, settings, API key and the downloaded local model. The app will start again from onboarding.',
       'Reset',
       async () => {
-        await clearAllConversations();
-        await clearAllDetections();
-        await clearAllScans();
-        await deleteModel();
+        // Each step is best-effort and bounded: a failed or hung store must
+        // not abort the rest or block the settings reset (a wedged web OPFS
+        // db throws or stalls here).
+        const bounded = (job: () => Promise<unknown>, label: string) =>
+          Promise.race([
+            job().then(() => 'ok' as const),
+            new Promise<'timeout'>((res) => setTimeout(() => res('timeout'), 8000)),
+          ]).then((r) => {
+            if (r === 'timeout') console.warn(`Reset step "${label}" timed out.`);
+          }).catch((error) => console.warn(`Reset step "${label}" failed:`, error));
+        await bounded(clearAllConversations, 'conversations');
+        await bounded(clearAllDetections, 'detections');
+        await bounded(clearAllScans, 'scans');
+        await bounded(deleteModel, 'model');
         // Settings go back to defaults (onboarded = false), so the root
         // layout switches to the onboarding screen.
         await reset();
@@ -143,27 +167,6 @@ export default function SettingsScreen() {
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="handled"
     >
-      <Section title="Profile" theme={theme}>
-        <Text style={[styles.label, { color: theme.text }]}>Nickname</Text>
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: theme.inputBackground,
-              borderColor: theme.border,
-              color: theme.text,
-            },
-          ]}
-          accessibilityLabel="Nickname"
-          value={nicknameDraft}
-          onChangeText={setNicknameDraft}
-          onBlur={() => update('nickname', nicknameDraft.trim())}
-          maxLength={30}
-          placeholder="Your nickname"
-          placeholderTextColor={theme.textSecondary}
-        />
-      </Section>
-
       <Section title="Appearance" theme={theme}>
         <View
           style={styles.segmented}
@@ -214,10 +217,10 @@ export default function SettingsScreen() {
               Lock when leaving app
             </Text>
             <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 2 }}>
-              Face, fingerprint, PIN, pattern, or password
+              {checkingAppLock ? 'Confirm using your phone’s security prompt…' : 'Face, fingerprint, PIN, pattern, or password'}
             </Text>
           </View>
-          <Switch
+          <AnimatedSwitch
             accessibilityLabel="Lock when leaving app"
             value={settings.appLockEnabled}
             onValueChange={(val) => void setAppLockEnabled(val)}
@@ -225,6 +228,12 @@ export default function SettingsScreen() {
             trackColor={{ false: theme.border, true: theme.buttonPrimary }}
           />
         </View>
+
+        {appLockNotice && (
+          <Text accessibilityLiveRegion="polite" style={{ color: theme.textSecondary, fontSize: 13, marginTop: 8 }}>
+            {appLockNotice}
+          </Text>
+        )}
 
         {settings.appLockEnabled && (
           <View style={{ marginTop: 14 }}>
@@ -342,13 +351,6 @@ function LinkRow({
 const styles = StyleSheet.create({
   scroll: { padding: 16, paddingBottom: 48 },
   label: { fontSize: 15, fontWeight: '600', marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-  },
   segmented: {
     flexDirection: 'row',
     gap: 10,

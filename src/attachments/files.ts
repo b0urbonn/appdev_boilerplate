@@ -3,6 +3,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { newId } from '@/db/client';
+import { assertAttachmentSize, MAX_ATTACHMENT_BYTES } from './limits';
 
 const attachmentsDir = () => `${FileSystem.documentDirectory}attachments/`;
 export const scansDir = () => `${FileSystem.documentDirectory}scans/`;
@@ -24,7 +25,8 @@ const MIME_BY_EXT: Record<string, string> = {
   m4a: 'audio/mp4',
   ogg: 'audio/ogg',
   wav: 'audio/wav',
-  mp3: 'audio/mp3',
+  mp3: 'audio/mpeg',
+  webm: 'audio/webm',
 };
 
 export type AttachmentKind = 'image' | 'audio' | 'video';
@@ -112,11 +114,16 @@ export async function saveRecording(tmpUri: string): Promise<string> {
 /** Read a stored attachment as base64 for a Gemini inlineData part. */
 export async function readAttachmentBase64(
   uri: string,
-  kind?: AttachmentKind
+  kind?: AttachmentKind,
+  maxBytes = MAX_ATTACHMENT_BYTES
 ): Promise<{ mimeType: string; data: string }> {
+  const info = await FileSystem.getInfoAsync(uri);
+  if (!info.exists || info.isDirectory) throw new Error('Attachment is no longer available.');
+  assertAttachmentSize(info.size, maxBytes);
   const data = await FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,
   });
+  assertAttachmentSize(Math.floor(data.length * 3 / 4) - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0), maxBytes);
   return { mimeType: mimeOf(uri, kind), data };
 }
 

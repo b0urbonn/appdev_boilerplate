@@ -21,6 +21,8 @@ import {
 interface SettingsContextValue {
   settings: Settings;
   ready: boolean;
+  loadError: string | null;
+  retryLoad: () => void;
   update: <K extends keyof Settings>(key: K, value: Settings[K]) => Promise<void>;
   /** Erase all settings and return to defaults (which shows onboarding). */
   reset: () => Promise<void>;
@@ -29,6 +31,8 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue>({
   settings: DEFAULT_SETTINGS,
   ready: false,
+  loadError: null,
+  retryLoad: () => {},
   update: async () => {},
   reset: async () => {},
 });
@@ -43,8 +47,16 @@ export function useLocalDevice() { return useContext(LocalDeviceContext); }
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  const persistedSettings = useRef(settings);
+  const pendingWrites = useRef(new Map<keyof Settings, Promise<void>>());
+  const writeVersions = useRef(new Map<keyof Settings, number>());
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const retryLoad = useCallback(() => {
+    setLoadError(null);
+    setLoadAttempt(attempt => attempt + 1);
+  }, []);
   const [localDevice, setLocalDevice] = useState<LocalDeviceCheck>({ state: 'idle' });
   const [deviceScan, setDeviceScan] = useState(0);
   const lastDeviceReport = useRef<LocalDeviceReport | null>(null);
@@ -56,11 +68,31 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    loadSettings()
-      .then(setSettings)
-      .catch((error) => console.warn('Unable to load settings:', error))
-      .finally(() => setReady(true));
-  }, []);
+    // Never substitute unlocked defaults when saved security settings cannot be read.
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Settings load timed out.')), 12000);
+    });
+    Promise.race([loadSettings(), timeout])
+      .then((loaded) => {
+        if (!active) return;
+        if (loaded.onboarded && !loaded.joinedAt) {
+          loaded.joinedAt = Date.now();
+          saveSetting('joinedAt', loaded.joinedAt).catch(() => {});
+        }
+        persistedSettings.current = loaded;
+        settingsRef.current = loaded;
+        setSettings(loaded);
+        setReady(true);
+      })
+      .catch((error) => {
+        if (__DEV__) console.warn('Unable to open saved settings:', error);
+        if (active) setLoadError('Your saved settings could not be opened. Try again to safely continue.');
+      })
+      .finally(() => clearTimeout(timer));
+    return () => { active = false; clearTimeout(timer); };
+  }, [loadAttempt]);
 
   // Hardware is scanned on selection; RAM/storage are sampled independently
   // every two seconds in the foreground, without reinitializing GPU drivers.
@@ -113,31 +145,63 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return () => { active = false; if (timer) clearInterval(timer); appState.remove(); unsubscribe(); };
   }, [ready, settings.provider, deviceScan]);
 
-  // Update state immediately and persist in the background.
+  // Serialize writes per key so rapid toggles cannot persist out of order.
+  // Security and explicit Save actions only take effect after durable storage succeeds.
   const update = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
-      if (settingsRef.current[key] === value) return Promise.resolve();
-      if (key === 'systemPrompt') {
-        // Explicit Save applies the prompt only after it reaches storage.
-        return saveSetting(key, value).then(() => setSettings(prev => ({ ...prev, [key]: value })));
-      }
+      if (settingsRef.current[key] === value && !pendingWrites.current.has(key)) return Promise.resolve();
+      const version = (writeVersions.current.get(key) ?? 0) + 1;
+      writeVersions.current.set(key, version);
+      const durable = key === 'systemPrompt' || key === 'appLockEnabled' || key === 'appLockTimeout';
+      const apply = (next: Settings[K]) => {
+        settingsRef.current = { ...settingsRef.current, [key]: next };
+        setSettings(settingsRef.current);
+      };
+      if (!durable) apply(value);
       if (key === 'provider' && value === 'local') setLocalDevice(previous => previous.state === 'ready'
         ? { ...previous, refreshing: true, refreshError: undefined }
         : { state: 'checking' });
-      setSettings((prev) => ({ ...prev, [key]: value }));
-      return saveSetting(key, value);
-    },
-    []
+      const preceding = pendingWrites.current.get(key) ?? Promise.resolve();
+      const saved = preceding.catch(() => {}).then(() => saveSetting(key, value)).then(() => {
+        persistedSettings.current = { ...persistedSettings.current, [key]: value };
+        if (durable) apply(value);
+      }).catch(error => {
+        if (!durable && writeVersions.current.get(key) === version) apply(persistedSettings.current[key]);
+        throw error;
+      }).finally(() => {
+        if (pendingWrites.current.get(key) === saved) pendingWrites.current.delete(key);
+      });
+      pendingWrites.current.set(key, saved);
+      // Preserve rejection for awaiting callers while handling fire-and-forget updates.
+      saved.catch(() => console.warn(`Unable to save setting "${String(key)}".`));
+      return saved;
+    }, []
   );
 
   const reset = useCallback(async () => {
-    await resetSettings();
+    // A failed erase must not be reported as success or remove the in-memory lock.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        (async () => {
+          await Promise.allSettled([...pendingWrites.current.values()]);
+          await resetSettings();
+        })(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Settings erase timed out. Please try again.')), 8000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    persistedSettings.current = DEFAULT_SETTINGS;
+    settingsRef.current = DEFAULT_SETTINGS;
     setSettings(DEFAULT_SETTINGS);
     lastDeviceReport.current = null;
     setLocalDevice({ state: 'idle' });
   }, []);
 
-  const settingsValue = useMemo(() => ({ settings, ready, update, reset }), [settings, ready, update, reset]);
+  const settingsValue = useMemo(() => ({ settings, ready, loadError, retryLoad, update, reset }), [settings, ready, loadError, retryLoad, update, reset]);
   const deviceValue = useMemo(() => ({ localDevice, refreshLocalDevice }), [localDevice, refreshLocalDevice]);
   return (
     <SettingsContext.Provider value={settingsValue}>

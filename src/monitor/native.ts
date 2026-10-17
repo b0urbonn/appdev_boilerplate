@@ -10,11 +10,21 @@ export interface InstalledApp {
   iconUri: string;
 }
 
+export interface DetectedRegion {
+  /** Normalized coordinates in the captured image (0..1). */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface MonitorFinding {
   category: 'deepfake' | 'ai_generated' | 'harmful';
   label: string;
   confidence: number;
   description: string;
+  region?: DetectedRegion;
+  cropUri?: string;
 }
 
 export interface MonitorResult {
@@ -33,13 +43,20 @@ export interface MonitorConfig {
 }
 
 interface AppMonitorModule {
+  captureScreenOnce?: () => Promise<string | null>;
+  readClipboardText?: () => Promise<string>;
+  cropDetectedRegions?: (uri: string, regions: DetectedRegion[]) => Promise<(string | null)[]>;
   getInstalledApps(): Promise<InstalledApp[]>;
   launchApp(packageName: string): Promise<boolean>;
   isMonitorServiceEnabled(): boolean;
+  getMonitorServiceStatus(): { enabled: boolean; connected: boolean; sharing: boolean };
+  requestScreenShare(): Promise<boolean>;
+  stopScreenShare(): void;
   supportsScreenshots(): boolean;
   openAccessibilitySettings(): void;
   setConfig(config: MonitorConfig): void;
-  reportResult(frameId: string, result: MonitorResult | null): void;
+  reportResult(frameId: string, result: MonitorResult | null, error: string | null): void;
+  reportQuickReply(requestId: string, reply: string | null, error: string | null): void;
   hasUsageAccess(): boolean;
   openUsageAccessSettings(): boolean;
   getDailyUsage(packages: string[], dayStarts: number[]): Promise<number[]>;
@@ -78,8 +95,8 @@ export function setMonitorConfig(config: MonitorConfig): void {
   native?.setConfig(config);
 }
 
-export function reportResult(frameId: string, result: MonitorResult | null): void {
-  native?.reportResult(frameId, result);
+export function reportResult(frameId: string, result: MonitorResult | null, error?: string): void {
+  native?.reportResult(frameId, result, error ?? null);
 }
 
 /** Whether the user granted Settings > Usage access (needed for screen time). */
@@ -94,4 +111,36 @@ export function openUsageAccessSettings(): boolean {
 /** Foreground ms in `packages` per day, one entry per local-midnight in `dayStarts`. */
 export async function getDailyUsage(packages: string[], dayStarts: number[]): Promise<number[]> {
   return native?.getDailyUsage(packages, dayStarts) ?? dayStarts.map(() => 0);
+}
+
+export function reportQuickReply(requestId: string, reply: string | null, error: string | null): void {
+  native?.reportQuickReply(requestId, reply, error);
+}
+
+export function getMonitorServiceStatus(): { enabled: boolean; connected: boolean; sharing: boolean } {
+  return native?.getMonitorServiceStatus() ?? { enabled: false, connected: false, sharing: false };
+}
+
+/** Ask Android which app window or display Maalam may inspect for this session. */
+export async function requestScreenShare(): Promise<boolean> {
+  return native?.requestScreenShare() ?? false;
+}
+
+export function stopScreenShare(): void {
+  native?.stopScreenShare();
+}
+
+/** Older APKs continue scanning until rebuilt with OpenCV support. */
+export async function cropDetectedRegions(uri: string, regions: DetectedRegion[]): Promise<(string | null)[]> {
+  return native?.cropDetectedRegions?.(uri, regions) ?? [];
+}
+
+export async function readClipboardText(): Promise<string> {
+  if (!native?.readClipboardText) throw new Error('Touch and hold the message field, then choose Paste. The Paste button needs the updated APK.');
+  return native.readClipboardText();
+}
+
+export async function captureScreenOnce(): Promise<string | null> {
+  if (!native?.captureScreenOnce) throw new Error('This installed APK has no screen-capture button support. Install the updated APK, or attach a screenshot with Screenshot / image.');
+  return native.captureScreenOnce();
 }

@@ -1,7 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, type Href, type Tabs } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { AppState, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -14,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PulseRing } from '@/components/PulseRing';
 import { SmoothPressable } from '@/components/SmoothPressable';
 import { useAiStatus } from '@/hooks/useAiStatus';
-import { isMonitorServiceEnabled, supportsAppMonitor } from '@/monitor/native';
+import { useMonitorService } from '@/monitor/useMonitorService';
 import { EASE_OUT, pop, SPRING, SPRING_BOUNCY } from '@/motion';
 import { useSettings } from '@/settings/SettingsContext';
 import { useTheme } from '@/theme';
@@ -26,11 +33,16 @@ export const TAB_BAR_GAP = 12;
 const CHAT_ROUTE = 'chat';
 const PROTECT_GREEN = '#178548';
 const ITEM_INSET = 4;
-const PROTECTION_SIZE = 78;
+const PROTECTION_SIZE = 76;
 const CENTER_SLOT_WIDTH = 100;
+// How far below the bar's top edge the circle sits, and the channel gap
+// between the circle and the notch edge — the notch is cut concentric with
+// the button so the cut wraps around it.
+const NOTCH_SEAT = 10;
+const NOTCH_GAP = 6;
 type ProtectionState = 'protected' | 'paused' | 'setup';
 
-/** Floating tab bar with a sliding selection pill and a center protection control. */
+/** Floating tab bar with a sliding selection pill and a center protection button. */
 export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const theme = useTheme();
   const router = useRouter();
@@ -38,18 +50,8 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
   const { problem } = useAiStatus();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const [serviceOn, setServiceOn] = useState(false);
+  const { enabled: serviceOn, connected } = useMonitorService();
   const [layouts, setLayouts] = useState<Record<string, { x: number; width: number }>>({});
-
-  useEffect(() => {
-    if (!supportsAppMonitor) return;
-    const syncService = () => setServiceOn(isMonitorServiceEnabled());
-    syncService();
-    const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') syncService();
-    });
-    return () => sub.remove();
-  }, []);
 
   const go = (route: (typeof state.routes)[number], focused: boolean) => {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -61,7 +63,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
   const appCount = settings.monitoredApps.length;
   const protectionState: ProtectionState =
     !settings.monitoringEnabled ? 'paused'
-    : serviceOn && appCount > 0 && !problem ? 'protected'
+    : serviceOn && connected && appCount > 0 && !problem ? 'protected'
     : 'setup';
   const protectionColor =
     protectionState === 'protected' ? PROTECT_GREEN
@@ -70,13 +72,16 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
   const protectionLabel =
     protectionState === 'protected' ? 'Protected'
     : protectionState === 'paused' ? 'Paused'
+    : !serviceOn ? 'Enable'
+    : !connected ? 'Reconnect'
+    : appCount === 0 ? 'Choose apps'
     : 'Set up';
   const protectionIcon =
     protectionState === 'protected' ? 'shield-checkmark'
     : protectionState === 'paused' ? 'shield-outline'
     : 'shield-half-outline';
-  const pillWidth = Math.max(1, screenWidth - 32);
-  const notchRadius = PROTECTION_SIZE / 2 + 8;
+  const pillWidth = Math.min(560, Math.max(1, screenWidth - 32));
+  const notchRadius = PROTECTION_SIZE / 2 + NOTCH_GAP;
 
   // Selection pill glides between tabs once their positions are known.
   const indicatorX = useSharedValue(0);
@@ -124,66 +129,88 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
       style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_GAP }, wrapStyle]}
     >
       <View style={styles.pill}>
-        <Svg
-          accessible={false}
-          pointerEvents="none"
-          width={pillWidth}
-          height={TAB_BAR_HEIGHT}
-          style={styles.pillShape}
-        >
-          <Path
-            d={pillPath(pillWidth, TAB_BAR_HEIGHT, notchRadius)}
-            fill={theme.card}
-            stroke={theme.border}
-            strokeWidth={StyleSheet.hairlineWidth}
-          />
-        </Svg>
+        {Platform.OS === 'web' ? (
+          <svg
+            width={pillWidth}
+            height={TAB_BAR_HEIGHT}
+            style={{ position: 'absolute', top: 0, left: 0, display: 'block', pointerEvents: 'none' }}
+          >
+            <path
+              d={pillPath(pillWidth, TAB_BAR_HEIGHT, notchRadius, NOTCH_SEAT)}
+              fill={theme.card}
+              stroke={theme.border}
+              strokeWidth={StyleSheet.hairlineWidth}
+            />
+          </svg>
+        ) : (
+          <Svg
+            accessible={false}
+            pointerEvents="none"
+            width={pillWidth}
+            height={TAB_BAR_HEIGHT}
+            style={styles.pillShape}
+          >
+            <Path
+              d={pillPath(pillWidth, TAB_BAR_HEIGHT, notchRadius, NOTCH_SEAT)}
+              fill={theme.card}
+              stroke={theme.border}
+              strokeWidth={StyleSheet.hairlineWidth}
+            />
+          </Svg>
+        )}
         <Animated.View
           pointerEvents="none"
           style={[styles.indicator, { backgroundColor: theme.buttonPrimary }, indicatorStyle]}
         />
-        {state.routes.filter((route) => route.name !== CHAT_ROUTE).map((route) => {
-          const focused = focusedKey === route.key;
-          const { title, tabBarIcon } = descriptors[route.key].options;
-          return (
-            <React.Fragment key={route.key}>
-              <TabItem
-                label={title ?? route.name}
-                focused={focused}
-                onPress={() => go(route, focused)}
-                onLayout={onItemLayout(route.key)}
-                renderIcon={(color) => tabBarIcon?.({ focused, color, size: 25 })}
-                inactiveColor={theme.textSecondary}
-              />
-              {route.name === 'scan' && (
-                <View style={styles.centerControls}>
-                  <SmoothPressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Protection: ${protectionLabel}. Open protected apps`}
-                    onPress={() => router.push('/apps' as Href)}
-                    pressedScale={0.92}
-                    style={[styles.protectionSlot, { backgroundColor: protectionColor, borderColor: theme.card }]}
-                  >
-                    <PulseRing
-                      color={protectionColor}
-                      radius={PROTECTION_SIZE / 2}
-                      active={protectionState !== 'paused'}
-                      // Urgent pulse while setup is needed; slow heartbeat when protected.
-                      period={protectionState === 'setup' ? 1400 : 2800}
-                      maxScale={protectionState === 'setup' ? 1.22 : 1.12}
-                    />
-                    <Animated.View key={protectionIcon} entering={pop()}>
-                      <Ionicons name={protectionIcon} size={25} color="#FFFFFF" />
-                    </Animated.View>
-                    <Text numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2} style={styles.protectionLabel}>
-                      {protectionLabel}
-                    </Text>
-                  </SmoothPressable>
-                </View>
-              )}
-            </React.Fragment>
-          );
-        })}
+        {state.routes
+          .filter((route) => route.name !== CHAT_ROUTE)
+          .map((route) => {
+            const focused = focusedKey === route.key;
+            const { title, tabBarIcon } = descriptors[route.key].options;
+            return (
+              <React.Fragment key={route.key}>
+                <TabItem
+                  label={title ?? route.name}
+                  focused={focused}
+                  onPress={() => go(route, focused)}
+                  onLayout={onItemLayout(route.key)}
+                  renderIcon={(color) => tabBarIcon?.({ focused, color, size: 25 })}
+                  inactiveColor={theme.textSecondary}
+                />
+                {route.name === 'scan' && (
+                  <View style={styles.centerControls}>
+                    <SmoothPressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Protection: ${protectionLabel}. Open protected apps`}
+                      accessibilityHint="Navigates directly to protection settings"
+                      onPress={() => router.push('/apps' as Href)}
+                      pressedScale={0.92}
+                      style={[styles.protectionSlot, { backgroundColor: protectionColor, borderColor: theme.card }]}
+                    >
+                      <PulseRing
+                        color={protectionColor}
+                        radius={PROTECTION_SIZE / 2}
+                        active={protectionState !== 'paused'}
+                        period={protectionState === 'setup' ? 1400 : 2800}
+                        maxScale={protectionState === 'setup' ? 1.22 : 1.12}
+                      />
+                      <Animated.View key={protectionIcon} entering={pop()}>
+                        <Ionicons name={protectionIcon} size={25} color="#FFFFFF" />
+                      </Animated.View>
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        maxFontSizeMultiplier={1.2}
+                        style={styles.protectionLabel}
+                      >
+                        {protectionLabel}
+                      </Text>
+                    </SmoothPressable>
+                  </View>
+                )}
+              </React.Fragment>
+            );
+          })}
       </View>
     </Animated.View>
   );
@@ -239,16 +266,19 @@ function TabItem({
 
 const styles = StyleSheet.create({
   wrap: {
-    position: 'absolute',
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as 'absolute',
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
+    zIndex: 100,
   },
   pill: {
     position: 'relative',
-    flex: 1,
+    width: '100%',
+    maxWidth: 560,
     flexDirection: 'row',
     height: TAB_BAR_HEIGHT,
     paddingHorizontal: 6,
@@ -268,7 +298,7 @@ const styles = StyleSheet.create({
   },
   protectionSlot: {
     position: 'absolute',
-    top: -PROTECTION_SIZE / 2,
+    top: NOTCH_SEAT - PROTECTION_SIZE / 2,
     left: (CENTER_SLOT_WIDTH - PROTECTION_SIZE) / 2,
     width: PROTECTION_SIZE,
     flexShrink: 0,
@@ -280,7 +310,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     ...shadow(),
   },
-  protectionLabel: { color: '#FFFFFF', fontSize: 10, fontWeight: '700', maxWidth: 70 },
+  protectionLabel: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    maxWidth: 70,
+  },
   centerControls: {
     position: 'relative',
     width: CENTER_SLOT_WIDTH,
@@ -290,8 +325,17 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     zIndex: 2,
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, marginVertical: ITEM_INSET },
-  label: { fontSize: 11, fontWeight: '500' },
+  item: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    marginVertical: ITEM_INSET,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
 });
 
 function shadow() {
@@ -304,16 +348,19 @@ function shadow() {
   };
 }
 
-function pillPath(width: number, height: number, notchRadius: number): string {
+function pillPath(width: number, height: number, notchRadius: number, seat: number): string {
   const corner = height / 2;
   const center = width / 2;
   const notch = Math.min(notchRadius, Math.max(24, center - corner));
-  const k = 0.5522848;
+  // The arc is concentric with the button (whose center is `seat` below the
+  // top edge), so it sweeps past the button's widest point and the cut hugs
+  // the circle instead of ending in a shallow dip under it.
+  const half = Math.sqrt(Math.max(1, notch * notch - seat * seat));
+  const entry = Math.asin(Math.min(1, seat / notch));
   return [
     `M ${corner} 0`,
-    `H ${center - notch}`,
-    `C ${center - notch + notch * k} 0 ${center - notch * k} ${notch} ${center} ${notch}`,
-    `C ${center + notch * k} ${notch} ${center + notch - notch * k} 0 ${center + notch} 0`,
+    `H ${center - half}`,
+    ...arcCommands(center, seat, notch, Math.PI + entry, -entry),
     `H ${width - corner}`,
     `Q ${width} 0 ${width} ${corner}`,
     `V ${height - corner}`,
@@ -323,4 +370,25 @@ function pillPath(width: number, height: number, notchRadius: number): string {
     `V ${corner}`,
     `Q 0 0 ${corner} 0 Z`,
   ].join(' ');
+}
+
+/** `C` segments approximating a circular arc from angle `a0` to `a1` (radians). */
+function arcCommands(cx: number, cy: number, r: number, a0: number, a1: number): string[] {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const segments = 8;
+  const step = (a1 - a0) / segments;
+  const k = (4 / 3) * Math.tan(step / 4);
+  const cmds: string[] = [];
+  for (let i = 0; i < segments; i++) {
+    const t0 = a0 + step * i;
+    const t1 = t0 + step;
+    const p1x = cx + r * (Math.cos(t0) - k * Math.sin(t0));
+    const p1y = cy + r * (Math.sin(t0) + k * Math.cos(t0));
+    const p2x = cx + r * (Math.cos(t1) + k * Math.sin(t1));
+    const p2y = cy + r * (Math.sin(t1) - k * Math.cos(t1));
+    const p3x = cx + r * Math.cos(t1);
+    const p3y = cy + r * Math.sin(t1);
+    cmds.push(`C ${round(p1x)} ${round(p1y)} ${round(p2x)} ${round(p2y)} ${round(p3x)} ${round(p3y)}`);
+  }
+  return cmds;
 }

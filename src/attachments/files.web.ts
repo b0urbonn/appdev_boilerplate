@@ -2,17 +2,24 @@
 // attachments are stored as data URLs. They persist in SQLite across
 // reloads, unlike blob: URLs.
 import * as ImagePicker from 'expo-image-picker';
+import { assertAttachmentSize, assertDataUrlSize, MAX_ATTACHMENT_BYTES } from './limits';
 
 /** Read any fetchable URI into a base64 data URL. */
 async function toDataUrl(uri: string): Promise<string> {
-  if (uri.startsWith('data:')) return uri;
+  if (uri.startsWith('data:')) { assertDataUrlSize(uri); return uri; }
   const blob = await (await fetch(uri)).blob();
+  assertAttachmentSize(blob.size);
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
+}
+
+async function checkedDataUrl(uri: string, size?: number): Promise<string> {
+  if (size !== undefined) assertAttachmentSize(size);
+  return toDataUrl(uri);
 }
 
 /**
@@ -27,7 +34,7 @@ export async function pickVideo(): Promise<{ uri: string; name: string; size: nu
   if (result.canceled || result.assets.length === 0) return null;
   const asset = result.assets[0];
   return {
-    uri: await toDataUrl(asset.uri),
+    uri: await checkedDataUrl(asset.uri, asset.fileSize),
     name: asset.fileName ?? 'video',
     size: asset.fileSize ?? 0,
   };
@@ -40,7 +47,7 @@ export async function pickAudioFile(): Promise<{ uri: string; name: string; size
   if (result.canceled || result.assets.length === 0) return null;
   const asset = result.assets[0];
   return {
-    uri: await toDataUrl(asset.uri),
+    uri: await checkedDataUrl(asset.uri, asset.size),
     name: asset.name ?? 'audio',
     size: asset.size ?? 0,
   };
@@ -57,7 +64,7 @@ export async function pickImage(): Promise<string | null> {
     quality: 0.7,
   });
   if (result.canceled || result.assets.length === 0) return null;
-  return toDataUrl(result.assets[0].uri);
+  return checkedDataUrl(result.assets[0].uri, result.assets[0].fileSize);
 }
 
 /**
@@ -70,8 +77,11 @@ export async function saveRecording(tmpUri: string): Promise<string> {
 
 /** Parse a stored data URL back into mime + base64 for a Gemini inlineData part. */
 export async function readAttachmentBase64(
-  uri: string
+  uri: string,
+  _kind?: AttachmentKind,
+  maxBytes = MAX_ATTACHMENT_BYTES
 ): Promise<{ mimeType: string; data: string }> {
+  assertDataUrlSize(uri, maxBytes);
   const match = /^data:([^;,]+)(?:;[^;,]*)*;base64,([\s\S]*)$/.exec(uri);
   if (!match) {
     throw new Error('Attachment is not a base64 data URL.');

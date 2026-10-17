@@ -1,18 +1,17 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { AppState, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { SmoothPressable } from '@/components/SmoothPressable';
 import { detectionStatsByApp, type AppDetectionStats } from '@/db/detections';
 import { useAiStatus } from '@/hooks/useAiStatus';
 import {
   appIconUri,
-  isMonitorServiceEnabled,
   launchApp,
   openAccessibilitySettings,
-  supportsAppMonitor,
 } from '@/monitor/native';
+import { useMonitorService } from '@/monitor/useMonitorService';
 import { useSettings } from '@/settings/SettingsContext';
 import { relativeTime } from '@/utils/time';
 import { useTheme } from '@/theme';
@@ -27,19 +26,9 @@ export default function ProtectedAppsScreen() {
   const { settings, update } = useSettings();
   const { problem } = useAiStatus();
   const [stats, setStats] = useState<Record<string, AppDetectionStats>>({});
-  const [serviceOn, setServiceOn] = useState(false);
+  const { enabled: serviceOn, connected } = useMonitorService();
   const apps = settings.monitoredApps;
   const appCount = apps.length;
-
-  React.useEffect(() => {
-    if (!supportsAppMonitor) return;
-    const syncService = () => setServiceOn(isMonitorServiceEnabled());
-    syncService();
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncService();
-    });
-    return () => subscription.remove();
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,13 +44,14 @@ export default function ProtectedAppsScreen() {
 
   const state: ProtectionState =
     !settings.monitoringEnabled ? 'paused'
-    : serviceOn && appCount > 0 && !problem ? 'protected'
+    : serviceOn && connected && appCount > 0 && !problem ? 'protected'
     : 'setup';
   const providerLabel = settings.provider === 'cloud' ? 'Gemini' : 'Local AI';
   const statusLine =
     state === 'protected' ? `Watching ${appCount} app${appCount === 1 ? '' : 's'} · ${providerLabel}`
     : state === 'paused' ? 'Paused'
-    : !serviceOn ? 'Accessibility service is off'
+    : !serviceOn ? 'Accessibility permission is off'
+    : !connected ? 'Accessibility is enabled, but Android has not connected the service. Turn Maalam off and on in Accessibility settings.'
     : appCount === 0 ? 'No apps selected'
     : (problem ?? 'Setup needed');
   const protectionColor =
@@ -72,10 +62,12 @@ export default function ProtectedAppsScreen() {
     state === 'protected' ? 'shield-checkmark'
     : state === 'paused' ? 'shield-outline'
     : 'shield-half-outline';
-  const protectionLabel = state === 'protected' ? 'Protected' : state === 'paused' ? 'Paused' : 'Set up';
+  const protectionLabel = state === 'protected' ? 'Protected' : state === 'paused' ? 'Paused' : !serviceOn ? 'Enable accessibility' : !connected ? 'Reconnect service' : appCount === 0 ? 'Choose apps' : 'Set up AI';
   const action: { label: string; icon: IconName; primary: boolean; onPress: () => void } =
     !serviceOn
       ? { label: 'Turn on protection', icon: 'shield-checkmark-outline', primary: true, onPress: openAccessibilitySettings }
+      : !connected
+        ? { label: 'Reconnect in Accessibility settings', icon: 'refresh-outline', primary: true, onPress: openAccessibilitySettings }
       : appCount === 0
         ? { label: 'Choose apps', icon: 'apps-outline', primary: true, onPress: () => router.push('/protected-apps' as Href) }
         : problem

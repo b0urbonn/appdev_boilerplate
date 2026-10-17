@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import type { ColorValue } from 'react-native';
+import { Platform, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReduceMotion } from '@/components/AccessibilityPreferences';
 import { FloatingTabBar, TAB_BAR_GAP, TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
@@ -25,10 +25,16 @@ export default function TabLayout() {
     <Tabs
       // Floating pill for Home, Scan, History and Learn. Chat is a global FAB.
       tabBar={(props) => <FloatingTabBar {...props} />}
+      // Keep inactive web scenes detached so they cannot remain focusable or
+      // contribute duplicate route content to the page.
+      detachInactiveScreens
       screenOptions={{
         headerShown: false,
-        // Screens shift sideways a little when switching tabs.
-        animation: reduceMotion ? 'none' : 'shift',
+        // Screens shift sideways on native when switching tabs.
+        // React Native Web keeps both scenes in the DOM while animating a tab
+        // switch. Its shifted scene can retain an intermediate fixed width,
+        // causing duplicate/overflowing content on narrow viewports.
+        animation: reduceMotion || Platform.OS === 'web' ? 'none' : 'shift',
         // No header, so keep content below the status bar; leave room at the
         // bottom so the floating bar doesn't cover the screen's content.
         sceneStyle: {

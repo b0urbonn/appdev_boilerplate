@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, type PressableProps } from 'react-native';
 import { useTheme } from '@/theme';
@@ -29,6 +29,7 @@ export function Button({
   return (
     <SmoothPressable
       {...props}
+      pressedScale={0.97}
       disabled={disabled || loading}
       accessibilityLabel={props.accessibilityLabel ?? label}
       accessibilityState={{ ...props.accessibilityState, busy: loading }}
@@ -47,15 +48,16 @@ export function Button({
 export function IconButton({ icon, label, variant = 'secondary', loading = false, style, ...props }: Omit<PressableProps, 'children'> & {
   icon: Icon;
   label: string;
-  variant?: 'primary' | 'secondary' | 'destructive';
+  variant?: 'primary' | 'secondary' | 'destructive' | 'ghost';
   loading?: boolean;
 }) {
   const theme = useTheme();
-  const background = variant === 'primary' ? theme.buttonPrimary : variant === 'destructive' ? theme.buttonDanger : theme.buttonSecondary;
-  const foreground = variant === 'secondary' ? theme.text : '#FFFFFF';
+  const background = variant === 'primary' ? theme.buttonPrimary : variant === 'destructive' ? theme.buttonDanger : variant === 'ghost' ? 'transparent' : theme.buttonSecondary;
+  const foreground = variant === 'secondary' || variant === 'ghost' ? theme.text : '#FFFFFF';
   return (
     <SmoothPressable
       {...props}
+      pressedScale={0.92}
       accessibilityLabel={label}
       disabled={props.disabled || loading}
       accessibilityState={{ ...props.accessibilityState, busy: loading }}

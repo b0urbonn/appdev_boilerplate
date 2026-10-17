@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useEffect, useState } from 'react';
 import { Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { useReduceMotion } from '@/components/AccessibilityPreferences';
@@ -49,9 +49,11 @@ export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
       ]}
     >
       {!isUser && (
-        <View style={[styles.avatar, { backgroundColor: theme.buttonPrimary }]}>
-          <Ionicons name="sparkles" size={14} color="#FFF" />
-        </View>
+        <Image
+          source={require('../../assets/images/chat-fox.webp')}
+          style={styles.avatar}
+          accessibilityLabel="Maalam"
+        />
       )}
       <View style={[styles.bubbleCol, isUser && styles.colUser]}>
         <SmoothPressable

@@ -1,0 +1,15 @@
+Eye-white correction
+
+Built-in image_gen produced the visual edit reference saved as:
+assets/images/mascot-eyes-reference.webp
+
+Runtime outputs:
+assets/images/mascot-animation.webp
+assets/images/mascot-poster.webp
+src/generated/mascotPoster.ts
+
+Final image edit prompt:
+Use case: precise-object-edit. Edit target: the supplied transparent pixel-art fox detective mascot. Repair ONLY the accidentally transparent whites of both eyes: fill the sclera and small eye glints with opaque pure white (#FFFFFF), retaining all black pupils, brown iris details, and black outlines. Keep the character's exact pose, face, hat, clothes, tablet, tail, colors, pixel-art style, framing and proportions unchanged. Everything outside the character stays genuinely transparent, including gaps around the silhouette. No green backdrop, no solid rectangle, no shadow, no extra objects. The goal is this same mascot with opaque white in its eyes, so a green Home-screen background cannot show through its eyes.
+
+Animation integration:
+scripts/optimize-app-images.py restores enclosed transparent eye areas in each original pose before resizing and encoding. This retains the original animation rather than replacing it with the generated reference illustration. The embedded first pose is regenerated from the same corrected frame.

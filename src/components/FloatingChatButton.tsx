@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect } from 'react';
-import { StyleSheet, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -24,17 +24,17 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
-/** App-wide draggable shortcut to the chatbot. */
+/** App-wide draggable shortcut to the original full Chat screen. */
 export function FloatingChatButton() {
   const pathname = usePathname();
   const router = useRouter();
+  const hidden = pathname.endsWith('/chat');
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const minY = insets.top + EDGE;
   const maxX = Math.max(EDGE, width - SIZE - EDGE);
   const maxY = Math.max(minY, height - insets.bottom - TAB_BAR_HEIGHT - TAB_BAR_GAP * 2 - SIZE - EDGE);
-  const hidden = pathname.endsWith('/chat');
 
   const x = useSharedValue(maxX);
   const y = useSharedValue(clamp(Math.round(height * 0.5 - SIZE / 2), minY, maxY));
@@ -50,7 +50,7 @@ export function FloatingChatButton() {
     y.set(withSpring(clamp(y.get(), minY, maxY), SPRING));
   }, [bounds, maxX, maxY, minY, x, y]);
 
-  // Pops in on launch and when leaving Chat; shrinks away while Chat is open.
+  // Hide this shortcut while the full Chat screen is already open.
   useEffect(() => {
     shown.set(hidden ? withTiming(0, { duration: 160 }) : withDelay(140, withSpring(1, SPRING_BOUNCY)));
   }, [hidden, shown]);
@@ -118,7 +118,7 @@ export function FloatingChatButton() {
           style,
         ]}
       >
-        <Ionicons name="chatbubble-ellipses-outline" size={25} color="#FFFFFF" />
+        <Ionicons name="chatbubble-ellipses" size={26} color="#FFFFFF" />
       </Animated.View>
     </GestureDetector>
   );
@@ -126,7 +126,7 @@ export function FloatingChatButton() {
 
 const styles = StyleSheet.create({
   button: {
-    position: 'absolute',
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as 'absolute',
     left: 0,
     top: 0,
     zIndex: 110,

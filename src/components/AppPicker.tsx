@@ -1,6 +1,6 @@
 // Searchable multi-select list of installed launcher apps, like a game
 // launcher's picker. Selection is a list of {packageName, label}.
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,

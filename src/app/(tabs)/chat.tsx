@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, {
   useCallback,
@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   StyleSheet,
   Text,
@@ -433,9 +434,11 @@ export default function ChatScreen() {
       {banner}
       {messages.length === 0 ? (
         <View style={styles.empty}>
-          <View style={[styles.emptyAvatar, { backgroundColor: theme.buttonPrimary }]}>
-            <Ionicons name="shield-checkmark" size={30} color="#FFF" />
-          </View>
+          <Image
+            source={require('../../../assets/images/chat-fox.webp')}
+            style={styles.emptyAvatar}
+            accessibilityLabel="Maalam"
+          />
           <Text style={[styles.emptyTitle, { color: theme.text }]}>
             What should I check{settings.nickname ? `, ${settings.nickname}` : ''}?
           </Text>

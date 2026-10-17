@@ -1,5 +1,5 @@
 // Inline play/pause chip for a voice-message attachment inside a bubble.
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';

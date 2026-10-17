@@ -1,6 +1,6 @@
 // Offline deepfake-safety lessons shown in the Learn tab.
 import type React from 'react';
-import type { Ionicons } from '@expo/vector-icons';
+import type Ionicons from '@expo/vector-icons/Ionicons';
 
 export interface LessonSection {
   heading: string;

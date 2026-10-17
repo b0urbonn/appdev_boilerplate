@@ -17,4 +17,5 @@ android {
 dependencies {
   // HeadlessJsTaskService (MaalamScanTaskService) lives in React Android.
   implementation 'com.facebook.react:react-android'
+  implementation 'org.opencv:opencv:4.12.0'
 }

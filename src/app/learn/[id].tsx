@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
+import { LessonIllustration } from '@/components/learn/LessonIllustration';
 import { LESSONS } from '@/learn/lessons';
 import { useTheme } from '@/theme';
 
@@ -29,9 +29,7 @@ export default function LessonScreen() {
       contentContainerStyle={styles.scroll}
     >
       <Stack.Screen options={{ title: lesson.title }} />
-      <View style={[styles.iconHeader, { backgroundColor: theme.buttonSecondary }]}>
-        <Ionicons name={lesson.icon} size={36} color={theme.tint} />
-      </View>
+      <LessonIllustration id={lesson.id} title={lesson.title} />
       <Text style={[styles.readTime, { color: theme.textSecondary }]}>
         {lesson.readMinutes} min read
       </Text>
@@ -61,16 +59,7 @@ export default function LessonScreen() {
 const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 4, paddingBottom: 32 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  iconHeader: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: 8,
-  },
-  readTime: { fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 8 },
+  readTime: { fontSize: 13, textAlign: 'left', marginTop: 0, marginBottom: 4 },
   section: { marginTop: 12, gap: 6 },
   heading: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
   bulletRow: { flexDirection: 'row', gap: 8, paddingLeft: 4 },

@@ -7,11 +7,21 @@ export interface InstalledApp {
   iconUri: string;
 }
 
+export interface DetectedRegion {
+  /** Normalized coordinates in the captured image (0..1). */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface MonitorFinding {
   category: 'deepfake' | 'ai_generated' | 'harmful';
   label: string;
   confidence: number;
   description: string;
+  region?: DetectedRegion;
+  cropUri?: string;
 }
 
 export interface MonitorResult {
@@ -85,7 +95,7 @@ export function openAccessibilitySettings(): void {
 
 export function setMonitorConfig(_config: MonitorConfig): void {}
 
-export function reportResult(_frameId: string, _result: MonitorResult | null): void {}
+export function reportResult(_frameId: string, _result: MonitorResult | null, _error?: string): void {}
 
 let simulatedUsageAccess = false;
 
@@ -106,3 +116,23 @@ export async function getDailyUsage(packages: string[], dayStarts: number[]): Pr
     return packages.length * (18 + ((day * 37) % 41)) * 60000;
   });
 }
+
+export function reportQuickReply(_requestId: string, _reply: string | null, _error: string | null): void {}
+
+export function getMonitorServiceStatus(): { enabled: boolean; connected: boolean; sharing: boolean } {
+  return { enabled: simulatedServiceOn, connected: simulatedServiceOn, sharing: false };
+}
+
+export async function requestScreenShare(): Promise<boolean> {
+  return false;
+}
+
+export function stopScreenShare(): void {}
+
+export async function cropDetectedRegions(_uri: string, _regions: DetectedRegion[]): Promise<(string | null)[]> { return []; }
+
+export async function readClipboardText(): Promise<string> {
+  return navigator.clipboard.readText();
+}
+
+export async function captureScreenOnce(): Promise<string | null> { return null; }

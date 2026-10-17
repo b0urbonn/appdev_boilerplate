@@ -1,12 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
   <!-- Special app access granted by the user in Settings > Usage access; used
        only to total time spent in the apps chosen for protection. -->
   <uses-permission
     android:name="android.permission.PACKAGE_USAGE_STATS"
     tools:ignore="ProtectedPermissions" />
   <application>
+    <activity
+      android:name=".OverlayAttachmentActivity"
+      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     <service
       android:name=".MaalamMonitorService"
       android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -21,5 +30,9 @@
     <service
       android:name=".MaalamScanTaskService"
       android:exported="false" />
+    <service
+      android:name=".MaalamProjectionService"
+      android:exported="false"
+      android:foregroundServiceType="mediaProjection" />
   </application>
 </manifest>

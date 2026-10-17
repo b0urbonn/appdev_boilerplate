@@ -12,7 +12,9 @@ const KEYS = {
   localBackend: 'localBackend',
   systemPrompt: 'systemPrompt',
   nickname: 'nickname',
+  profileAvatar: 'profileAvatar',
   onboarded: 'onboarded',
+  joinedAt: 'joinedAt',
   theme: 'theme',
   modelResumeData: 'modelResumeData',
   monitoredApps: 'monitoredApps',
@@ -50,7 +52,10 @@ export interface Settings {
   localBackend: LocalBackend;
   systemPrompt: string;
   nickname: string;
+  profileAvatar: string;
   onboarded: boolean;
+  /** When onboarding finished (0 for installs before this field existed). */
+  joinedAt: number;
   theme: ThemeMode;
   monitoredApps: MonitoredApp[];
   monitoringEnabled: boolean;
@@ -67,7 +72,9 @@ export const DEFAULT_SETTINGS: Settings = {
   localBackend: 'auto',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   nickname: '',
+  profileAvatar: 'kai',
   onboarded: false,
+  joinedAt: 0,
   theme: 'light',
   monitoredApps: [],
   monitoringEnabled: true,
@@ -77,14 +84,16 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export async function loadSettings(): Promise<Settings> {
-  const [provider, geminiModel, localBackend, systemPrompt, nickname, onboarded, theme, monitoredApps, monitoringEnabled, alertsSeenAt, appLockEnabled, appLockTimeout, apiKey] =
+  const [provider, geminiModel, localBackend, systemPrompt, nickname, profileAvatar, onboarded, joinedAt, theme, monitoredApps, monitoringEnabled, alertsSeenAt, appLockEnabled, appLockTimeout, apiKey] =
     await Promise.all([
       Storage.getItem(KEYS.provider),
       Storage.getItem(KEYS.geminiModel),
       Storage.getItem(KEYS.localBackend),
       Storage.getItem(KEYS.systemPrompt),
       Storage.getItem(KEYS.nickname),
+      Storage.getItem(KEYS.profileAvatar),
       Storage.getItem(KEYS.onboarded),
+      Storage.getItem(KEYS.joinedAt),
       Storage.getItem(KEYS.theme),
       Storage.getItem(KEYS.monitoredApps),
       Storage.getItem(KEYS.monitoringEnabled),
@@ -105,7 +114,9 @@ export async function loadSettings(): Promise<Settings> {
         : 'auto',
     systemPrompt: systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
     nickname: nickname ?? '',
+    profileAvatar: profileAvatar ?? 'kai',
     onboarded: onboarded === 'true',
+    joinedAt: Number(joinedAt) || 0,
     theme: theme === 'dark' ? 'dark' : 'light',
     monitoredApps: parseMonitoredApps(monitoredApps),
     monitoringEnabled: monitoringEnabled !== 'false',
@@ -143,8 +154,12 @@ export async function saveSetting<K extends keyof Settings>(
       return Storage.setItemAsync(KEYS.systemPrompt, value as string);
     case 'nickname':
       return Storage.setItemAsync(KEYS.nickname, value as string);
+    case 'profileAvatar':
+      return Storage.setItemAsync(KEYS.profileAvatar, value as string);
     case 'onboarded':
       return Storage.setItemAsync(KEYS.onboarded, String(value));
+    case 'joinedAt':
+      return Storage.setItemAsync(KEYS.joinedAt, String(value));
     case 'theme':
       return Storage.setItemAsync(KEYS.theme, value as string);
     case 'monitoredApps':

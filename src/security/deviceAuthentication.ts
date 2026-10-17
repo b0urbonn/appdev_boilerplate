@@ -13,12 +13,14 @@ export async function getDeviceSecurityLevel() {
   return LocalAuthentication.getEnrolledLevelAsync();
 }
 
-export async function authenticateWithDevice() {
+export async function authenticateWithDevice(purpose: 'unlock' | 'enable' = 'unlock') {
   const LocalAuthentication = await getLocalAuthentication();
   return LocalAuthentication.authenticateAsync({
-    promptMessage: 'Unlock Maalam',
-    promptSubtitle: 'Verify your identity to continue',
+    promptMessage: purpose === 'enable' ? 'Enable Maalam app lock' : 'Unlock Maalam',
+    promptSubtitle: purpose === 'enable' ? 'Confirm your identity to enable app lock' : 'Verify your identity to continue',
     promptDescription: 'Use biometrics or your device screen lock.',
     biometricsSecurityLevel: 'weak',
+    disableDeviceFallback: false,
+    requireConfirmation: true,
   });
 }

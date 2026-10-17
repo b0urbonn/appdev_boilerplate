@@ -1,8 +1,8 @@
 // Cloud provider: Gemini via raw REST (no SDK).
 // Uses expo/fetch because the stock React Native fetch does not stream.
 import { fetch } from 'expo/fetch';
-import * as FileSystem from 'expo-file-system/legacy';
 import { readAttachmentBase64 } from '@/attachments/files';
+import { MAX_INLINE_REQUEST_CHARS } from '@/attachments/limits';
 import type { ChatMessage, ChatProvider } from './types';
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -269,17 +269,18 @@ export function createGeminiProvider({ apiKey, model }: GeminiProviderOptions): 
 
     async generate(history, { systemPrompt, signal, onToken, onContext, onModel }) {
       checkAbort(signal);
-      const candidates = await candidateModels(apiKey, model, history);
-      checkAbort(signal);
-      const contents = await Promise.all(history.map(async (message) => {
-        const parts: Record<string, unknown>[] = [];
-        if (message.videoUri) {
-          // Gemini inlineData caps around 20 MB; base64 inflates ~1.37x.
-          const info = await FileSystem.getInfoAsync(message.videoUri).catch(() => null);
-          if (info?.exists && (info.size ?? 0) > 19 * 1024 * 1024 / 1.37) {
-            throw new Error('This video is too large to scan. Trim it to under about 14 MB (roughly 1 minute).');
-          }
+      const contents: { role: string; parts: Record<string, unknown>[] }[] = [];
+      let remaining = MAX_INLINE_REQUEST_CHARS;
+      // Read sequentially with a shared budget; Promise.all can allocate every
+      // historical image/video at once before any request size check runs.
+      for (const message of history) {
+        checkAbort(signal);
+        if (message.content) {
+          // Reserve enough room for JSON escaping, including control characters.
+          remaining -= message.content.length * 6;
+          if (remaining < 0) throw new Error('This chat is too large to send. Start a new chat.');
         }
+        const parts: Record<string, unknown>[] = [];
         const mediaParts: [string | undefined, 'image' | 'audio' | 'video'][] = [
           [message.imageUri, 'image'],
           [message.audioUri, 'audio'],
@@ -287,13 +288,19 @@ export function createGeminiProvider({ apiKey, model }: GeminiProviderOptions): 
         ];
         for (const [uri, kind] of mediaParts) {
           if (uri) {
-            const { mimeType, data } = await readAttachmentBase64(uri, kind);
+            checkAbort(signal);
+            const { mimeType, data } = await readAttachmentBase64(uri, kind, Math.floor(remaining / 4) * 3);
+            checkAbort(signal);
+            remaining -= data.length;
+            if (remaining < 0) throw new Error('These attachments are too large. Start a new chat with fewer attachments.');
             parts.push({ inlineData: { mimeType, data } });
           }
         }
         if (message.content) parts.push({ text: message.content });
-        return { role: message.role === 'assistant' ? 'model' : 'user', parts };
-      }));
+        contents.push({ role: message.role === 'assistant' ? 'model' : 'user', parts });
+      }
+      const candidates = await candidateModels(apiKey, model, history);
+      checkAbort(signal);
       let failure: unknown;
       let failedModel: string | undefined;
       let skipped = false;

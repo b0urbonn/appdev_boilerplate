@@ -2,6 +2,8 @@
 // moved into documentDirectory/detections/ and removed again on delete.
 import * as FileSystem from 'expo-file-system/legacy';
 import { getDb } from '@/db/client';
+import { deleteFindingCrops } from '@/attachments/regionCrops';
+import { isOwnedMediaFile } from '@/attachments/ownedFile';
 import type { MonitorFinding } from '@/monitor/native';
 
 export const detectionsDir = () => `${FileSystem.documentDirectory}detections/`;
@@ -80,9 +82,13 @@ export async function insertDetection(d: Detection): Promise<void> {
 }
 
 export async function listDetections(limit?: number): Promise<Detection[]> {
+  if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 0)) {
+    throw new Error('Detection limit must be a non-negative integer.');
+  }
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
-    `SELECT * FROM detections ORDER BY created_at DESC${limit ? ` LIMIT ${limit}` : ''}`
+    `SELECT * FROM detections ORDER BY created_at DESC${limit === undefined ? '' : ' LIMIT ?'}`,
+    ...(limit === undefined ? [] : [limit])
   );
   return rows.map(toDetection);
 }
@@ -97,18 +103,21 @@ export async function getDetection(id: string): Promise<Detection | null> {
 
 export async function deleteDetection(id: string): Promise<void> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ screenshot_uri: string | null }>(
-    'SELECT screenshot_uri FROM detections WHERE id = ?', id
+  const row = await db.getFirstAsync<{ screenshot_uri: string | null; findings: string }>(
+    'SELECT screenshot_uri, findings FROM detections WHERE id = ?', id
   );
-  if (row?.screenshot_uri?.startsWith(detectionsDir())) {
+  if (row?.screenshot_uri && isOwnedMediaFile(row.screenshot_uri, detectionsDir())) {
     await FileSystem.deleteAsync(row.screenshot_uri, { idempotent: true }).catch(() => {});
   }
   await db.runAsync('DELETE FROM detections WHERE id = ?', id);
+  if (row) { try { await deleteFindingCrops(JSON.parse(row.findings)); } catch {} }
 }
 
 export async function clearAllDetections(): Promise<void> {
   const db = await getDb();
+  const cropRows = await db.getAllAsync<{ findings: string }>('SELECT findings FROM detections');
   await db.runAsync('DELETE FROM detections');
+  for (const row of cropRows) { try { await deleteFindingCrops(JSON.parse(row.findings)); } catch {} }
   await FileSystem.deleteAsync(detectionsDir(), { idempotent: true }).catch(() => {});
 }
 
@@ -123,16 +132,19 @@ export async function countDetectionsSince(ts: number): Promise<number> {
 /** Alert count per bucket; `dayStarts` are ascending, the last bucket is open-ended. */
 export async function countDetectionsPerDay(dayStarts: number[]): Promise<number[]> {
   if (dayStarts.length === 0) return [];
-  const db = await getDb();
-  const rows = await db.getAllAsync<{ created_at: number }>(
-    'SELECT created_at FROM detections WHERE created_at >= ?', dayStarts[0]
-  );
-  const counts = dayStarts.map(() => 0);
-  for (const { created_at } of rows) {
-    let i = dayStarts.length - 1;
-    while (i > 0 && created_at < dayStarts[i]) i--;
-    counts[i]++;
+  if (dayStarts.some((start, i) => !Number.isSafeInteger(start) || (i > 0 && start <= dayStarts[i - 1]))) {
+    throw new Error('Activity buckets must be ascending timestamps.');
   }
+  const db = await getDb();
+  // Each indexed range returns one count; no individual detection crosses the JS bridge.
+  // Explicit local-midnight boundaries also preserve days shortened/extended by DST.
+  const queries = dayStarts.map((_, i) =>
+    `SELECT ${i} AS bucket, COUNT(*) AS n FROM detections WHERE created_at >= ?${i + 1 < dayStarts.length ? ' AND created_at < ?' : ''}`
+  );
+  const boundaries = dayStarts.flatMap((start, i) => i + 1 < dayStarts.length ? [start, dayStarts[i + 1]] : [start]);
+  const rows = await db.getAllAsync<{ bucket: number; n: number }>(queries.join(' UNION ALL '), ...boundaries);
+  const counts = dayStarts.map(() => 0);
+  for (const row of rows) counts[row.bucket] = row.n;
   return counts;
 }
 

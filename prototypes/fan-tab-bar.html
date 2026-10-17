@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fan-out tab bar</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --card: #f2f2f7;
+    --border: #d8d8de;
+    --text: #111111;
+    --muted: #6b6b70;
+    --accent: #0066cc;
+    --ease: linear(0, 0.457 16.7%, 0.876 33.3%, 1.008 50%, 1.02 61.1%, 1);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+
+  /* Scrim sits under the bar; fades in and closes the menu on tap. */
+  .scrim {
+    position: fixed; inset: 0; z-index: 1;
+    background: rgba(255, 255, 255, 0.72);
+    opacity: 0; pointer-events: none;
+    transition: opacity 180ms ease-out;
+  }
+  body.open .scrim { opacity: 1; pointer-events: auto; }
+
+  /* The bar: 5-column grid — two tabs, a wider empty centre cell, two tabs. */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+    height: 64px; background: var(--card); border-top: 1px solid var(--border);
+  }
+  .grid {
+    display: grid; height: 100%;
+    grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;
+    align-items: stretch;
+  }
+  .tab {
+    border: 0; background: none; font: inherit; font-size: 12px;
+    color: var(--muted); display: grid; place-items: center; cursor: pointer;
+  }
+  .tab[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+
+  /* Raised 60px accent-gradient circle, 7px page-background ring = cut into the bar. */
+  .fab {
+    position: absolute; left: 50%; top: -24px; margin-left: -30px;
+    width: 60px; height: 60px; border: 0; border-radius: 50%;
+    background: linear-gradient(155deg, #3d8bff, var(--accent));
+    color: #fff; cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 0 0 7px var(--bg), 0 8px 20px rgba(0, 0, 0, 0.14);
+  }
+  .fab .icon { display: grid; place-items: center; transition: transform 594ms var(--ease); }
+  body.open .fab .icon { transform: rotate(45deg); }
+
+  /* Three 58px white action circles fan from the button centre onto an arc. */
+  .action {
+    position: absolute; left: 50%; top: 6px; /* 6px = button centre below bar top */
+    margin: -29px 0 0 -29px;
+    width: 58px; height: 58px; border-radius: 50%;
+    border: 1px solid var(--border); background: #fff; color: var(--text);
+    font: 700 10px/1 system-ui, sans-serif; cursor: pointer;
+    display: grid; place-items: center; gap: 0;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    opacity: 0; pointer-events: none;
+    transform: translate(0, 0) scale(0.5);
+    transition:
+      transform 594ms var(--ease),
+      opacity 180ms ease-out;
+    transition-delay: calc(var(--i) * 40ms);
+  }
+  body.open .action {
+    opacity: 1; pointer-events: auto;
+    transform: translate(var(--x), var(--y)) scale(1);
+  }
+  .action .glyph { font-size: 16px; color: var(--accent); }
+
+  /* Reduced motion: fade the actions in place instead of travelling. */
+  @media (prefers-reduced-motion: reduce) {
+    .action {
+      transform: translate(var(--x), var(--y)) scale(1);
+      transition: opacity 180ms ease-out;
+      transition-delay: calc(var(--i) * 40ms);
+    }
+    .fab .icon { transition: transform 120ms linear; }
+  }
+</style>
+</head>
+<body>
+  <main style="padding:24px; max-width:560px; margin:0 auto;">
+    <h1>Fan-out tab bar</h1>
+    <p>Tap the centre button. Esc or the scrim closes it; actions are tabbable only while open.</p>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+
+  <nav class="bar" aria-label="Primary">
+    <div class="grid">
+      <button class="tab" aria-selected="true">Home</button>
+      <button class="tab" aria-selected="false">Scan</button>
+      <div class="slot"></div>
+      <button class="tab" aria-selected="false">History</button>
+      <button class="tab" aria-selected="false">Learn</button>
+    </div>
+
+    <button class="fab" id="fab" aria-expanded="false" aria-controls="actions" aria-label="Quick actions">
+      <span class="icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+      </span>
+    </button>
+
+    <div id="actions" role="group" aria-label="Quick actions">
+      <button class="action" style="--i:0; --x:-82px; --y:-48px" tabindex="-1"><span class="glyph">◎</span><span>Scan</span></button>
+      <button class="action" style="--i:1; --x:0;     --y:-96px" tabindex="-1"><span class="glyph">💬</span><span>Ask</span></button>
+      <button class="action" style="--i:2; --x:82px;  --y:-48px" tabindex="-1"><span class="glyph">🛡</span><span>Protect</span></button>
+    </div>
+  </nav>
+
+<script>
+  const fab = document.getElementById('fab');
+  const actions = document.getElementById('actions');
+  const scrim = document.getElementById('scrim');
+
+  function setOpen(open) {
+    document.body.classList.toggle('open', open);
+    fab.setAttribute('aria-expanded', String(open));
+    for (const a of actions.querySelectorAll('.action')) a.tabIndex = open ? 0 : -1;
+  }
+
+  fab.addEventListener('click', () => setOpen(!document.body.classList.contains('open')));
+  scrim.addEventListener('click', () => { setOpen(false); fab.focus(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('open')) { setOpen(false); fab.focus(); }
+  });
+</script>
+</body>
+</html>

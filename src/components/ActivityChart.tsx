@@ -1,6 +1,6 @@
 // Home "This week" card: paired bars per day for screen time in protected
 // apps and alerts raised. Bars grow in with a stagger; tapping a day selects it.
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -77,7 +77,7 @@ export function ActivityChart({
   const pickMinutes = pick.screenMs / 60000;
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <View style={[styles.card, { backgroundColor: theme.card }]}>
       <View style={styles.header}>
         <View style={styles.flex}>
           <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>This week</Text>
@@ -204,7 +204,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, padding: 16, gap: 14 },
+  card: { borderRadius: 16, padding: 16, gap: 14, overflow: 'hidden' },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   eyebrow: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
   title: { fontSize: 17, fontWeight: '700', marginTop: 2 },
@@ -216,11 +216,13 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, lineHeight: 16 },
   caption: { fontSize: 13 },
   plot: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     height: CHART_HEIGHT + 30,
     paddingBottom: 0,
+    overflow: 'hidden',
   },
   gridLine: { position: 'absolute', left: 0, right: 0, borderTopWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed' },
   column: { flex: 1, alignItems: 'center', gap: 8 },

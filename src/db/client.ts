@@ -64,6 +64,10 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_scans_created
     ON scans (created_at);
   `,
+  `
+  CREATE INDEX IF NOT EXISTS idx_detections_package_created
+    ON detections (package_name, created_at);
+  `,
 ];
 
 export function newId(): string {
@@ -76,8 +80,10 @@ async function migrate(database: SQLite.SQLiteDatabase): Promise<void> {
   );
   const version = row?.user_version ?? 0;
   for (let i = version; i < MIGRATIONS.length; i++) {
-    await database.execAsync(MIGRATIONS[i]);
-    await database.execAsync(`PRAGMA user_version = ${i + 1}`);
+    await database.withTransactionAsync(async () => {
+      await database.execAsync(MIGRATIONS[i]);
+      await database.execAsync(`PRAGMA user_version = ${i + 1}`);
+    });
   }
 }
 
@@ -87,11 +93,20 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!initPromise) {
     initPromise = (async () => {
       const database = await SQLite.openDatabaseAsync('chat.db');
-      await database.execAsync('PRAGMA foreign_keys = ON');
-      await migrate(database);
-      db = database;
-      return database;
-    })();
+      try {
+        await database.execAsync('PRAGMA foreign_keys = ON');
+        await migrate(database);
+        db = database;
+        return database;
+      } catch (error) {
+        await database.closeAsync().catch(() => {});
+        throw error;
+      }
+    })().catch(error => {
+      // A transient startup/lock failure must not poison every later read.
+      initPromise = null;
+      throw error;
+    });
   }
   return initPromise;
 }

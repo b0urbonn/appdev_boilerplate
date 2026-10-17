@@ -1,8 +1,8 @@
 // Shared verdict presentation for detections/[id] and scans/[id]: banner,
 // per-finding chips with confidence bars, then the summary.
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { verdictLabel } from '@/db/detections';
 import type { MonitorFinding } from '@/monitor/native';
 import { useTheme } from '@/theme';
@@ -64,6 +64,10 @@ export function VerdictReport({
               ]}
             />
           </View>
+          {f.cropUri && <View style={{ gap: 4, marginVertical: 8 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>Suspected region · AI-localized, OpenCV crop</Text>
+            <Image source={{ uri: f.cropUri }} accessibilityLabel={`Suspected region: ${f.label}`} style={{ width: '100%', height: 180, borderRadius: 8, backgroundColor: '#101820' }} resizeMode="contain" />
+          </View>}
           {!!f.description && (
             <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{f.description}</Text>
           )}

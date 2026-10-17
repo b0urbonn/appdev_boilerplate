@@ -1,8 +1,10 @@
 package expo.modules.appmonitor
 
+import android.app.Activity
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -11,18 +13,26 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
-import android.text.TextUtils
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityManager
 import expo.modules.kotlin.exception.Exceptions
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.activityresult.AppContextActivityResultContract
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import androidx.activity.result.ActivityResult
 import java.io.File
 import java.io.FileOutputStream
 
 class AppMonitorModule : Module() {
+  private lateinit var screenCaptureLauncher: AppContextActivityResultLauncher<String, ActivityResult>
+
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
@@ -57,19 +67,22 @@ class AppMonitorModule : Module() {
       } else false
     }
 
-    Function("isMonitorServiceEnabled") {
-      if (Settings.Secure.getInt(context.contentResolver,
-          Settings.Secure.ACCESSIBILITY_ENABLED, 0) != 1) return@Function false
-      val enabled = Settings.Secure.getString(context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return@Function false
-      val expected = ComponentName(context, MaalamMonitorService::class.java)
-        .flattenToString()
-      val splitter = TextUtils.SimpleStringSplitter(':')
-      splitter.setString(enabled)
-      for (service in splitter) {
-        if (service.equals(expected, ignoreCase = true)) return@Function true
-      }
-      false
+    Function("isMonitorServiceEnabled") { monitorServiceEnabled() }
+
+    Function("getMonitorServiceStatus") {
+      mapOf("enabled" to monitorServiceEnabled(),
+        "connected" to (MaalamMonitorService.instance?.get() != null),
+        "sharing" to MaalamProjectionService.isRunning())
+    }
+
+    AsyncFunction("readClipboardText") {
+      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+      val clip = clipboard.primaryClip
+      if (clip != null && clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString()?.take(5000) ?: "" else ""
+    }
+
+    AsyncFunction("cropDetectedRegions") { uri: String, regions: List<Map<String, Double>> ->
+      ScreenRegionCropper.crop(context, uri, regions)
     }
 
     Function("supportsScreenshots") { Build.VERSION.SDK_INT >= 30 }
@@ -79,6 +92,55 @@ class AppMonitorModule : Module() {
         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
           .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       )
+    }
+
+    AsyncFunction("requestScreenShare") { promise: Promise ->
+      if (!::screenCaptureLauncher.isInitialized) {
+        promise.reject("SCREEN_SHARE_UNAVAILABLE", "The screen sharing prompt is not ready.", null)
+        return@AsyncFunction
+      }
+      screenCaptureLauncher.launch("screen-share") { result ->
+        val data = result.data
+        if (result.resultCode != Activity.RESULT_OK || data == null) {
+          promise.resolve(false)
+          return@launch
+        }
+        runCatching {
+          MaalamProjectionService.start(context, result.resultCode, data)
+        }.onSuccess {
+          promise.resolve(true)
+        }.onFailure { error ->
+          promise.reject("SCREEN_SHARE_START_FAILED", error.message ?: "Could not start screen sharing.", error)
+        }
+      }
+    }
+
+    AsyncFunction("captureScreenOnce") { promise: Promise ->
+      if (!::screenCaptureLauncher.isInitialized) {
+        promise.reject("SCREEN_CAPTURE_UNAVAILABLE", "Open Maalam before taking a screenshot.", null)
+        return@AsyncFunction
+      }
+      if (MaalamProjectionService.isRunning()) {
+        promise.reject("SCREEN_SHARE_ACTIVE", "Stop the live screen share before taking a single screenshot.", null)
+        return@AsyncFunction
+      }
+      screenCaptureLauncher.launch("single-capture") { result ->
+        val data = result.data
+        if (result.resultCode != Activity.RESULT_OK || data == null) {
+          promise.resolve(null)
+          return@launch
+        }
+        android.widget.Toast.makeText(context, "Open the content to check. Screenshot in 4 seconds.", android.widget.Toast.LENGTH_LONG).show()
+        MaalamProjectionService.startSingleCapture(context, result.resultCode, data) { capture ->
+          capture.onSuccess { promise.resolve(it) }.onFailure {
+            promise.reject("SCREEN_CAPTURE_FAILED", it.message ?: "Screen capture failed.", it)
+          }
+        }
+      }
+    }
+
+    Function("stopScreenShare") {
+      MaalamProjectionService.stop(context)
     }
 
     Function("setConfig") { config: Map<String, Any?> ->
@@ -98,8 +160,15 @@ class AppMonitorModule : Module() {
         .apply()
     }
 
-    Function("reportResult") { frameId: String, result: Map<String, Any?>? ->
-      MaalamMonitorService.reportResult(frameId, result)
+    Function("reportResult") { frameId: String, result: Map<String, Any?>?, error: String? ->
+      MaalamMonitorService.reportResult(frameId, result, error)
+      MaalamProjectionService.reportResult(frameId, result, error)
+    }
+
+    Function("reportQuickReply") { requestId: String, reply: String?, error: String? ->
+      android.os.Handler(android.os.Looper.getMainLooper()).post {
+        MaalamMonitorService.instance?.get()?.onQuickReply(requestId, reply, error)
+      }
     }
 
     Function("hasUsageAccess") { hasUsageAccessSafely() }
@@ -181,6 +250,38 @@ class AppMonitorModule : Module() {
       close(now)
       totals.toList()
     }
+
+    RegisterActivityContracts {
+      screenCaptureLauncher = registerForActivityResult(ScreenCaptureContract()) { _, _ -> }
+    }
+  }
+
+  private class ScreenCaptureContract : AppContextActivityResultContract<String, ActivityResult> {
+    override fun createIntent(context: Context, input: String) =
+      (context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager)
+        .createScreenCaptureIntent()
+
+    override fun parseResult(input: String, resultCode: Int, intent: Intent?) =
+      ActivityResult(resultCode, intent)
+  }
+
+  /** Compare parsed components: Android can store full or shortened class names.
+   * Enabled permission and an actually bound service are separate states. */
+  private fun monitorServiceEnabled(): Boolean {
+    if (MaalamMonitorService.instance?.get() != null) return true
+    val expected = ComponentName(context, MaalamMonitorService::class.java)
+    val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+    val listed = runCatching {
+      manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).any {
+        val info = it.resolveInfo.serviceInfo
+        ComponentName(info.packageName, info.name) == expected
+      }
+    }.getOrDefault(false)
+    if (listed) return true
+    return runCatching {
+      Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        ?.split(':')?.any { ComponentName.unflattenFromString(it.trim()) == expected } == true
+    }.getOrDefault(false)
   }
 
   private fun hasUsageAccess(): Boolean {

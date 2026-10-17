@@ -1,12 +1,12 @@
 // Runs one captured screen frame or a user-staged scan through the selected
 // provider and parses the strict JSON verdict. The monitor path returns null
-// for clean/unreadable/unavailable results; the manual-scan path returns
+// for unflagged results and throws on failed checks; the manual-scan path returns
 // safe verdicts too and throws readable errors the UI can show.
 import NetInfo from '@react-native-community/netinfo';
 import { getProvider, type ChatMessage } from '@/ai';
 import { releaseLocalConversation } from '@/ai/local';
 import { newId } from '@/db/client';
-import type { MonitorFinding, MonitorResult } from '@/monitor/native';
+import type { DetectedRegion, MonitorFinding, MonitorResult } from '@/monitor/native';
 import type { Settings } from '@/settings/storage';
 
 export interface MonitorFrame {
@@ -18,7 +18,7 @@ export interface MonitorFrame {
   capturedAt?: number;
 }
 
-const DETECTION_SYSTEM_PROMPT = `You are Maalam's background safety monitor. You are shown a screenshot and the visible text captured from an Android app the user chose to protect.
+const DETECTION_SYSTEM_PROMPT = `You are Maalam's background safety monitor. You are shown a screenshot and visible text captured from an app or display the user explicitly chose to scan.
 
 Decide whether the screen contains a likely deepfake or AI-manipulated face, AI-generated imagery presented as real, or harmful content (hate speech, threats, harassment, sexual exploitation, self-harm, scams, dangerous misinformation).
 
@@ -26,7 +26,8 @@ Be conservative: ordinary photos, videos, game graphics, memes and normal app UI
 
 Reply with ONLY a JSON object, no markdown, no other text:
 {"flagged":bool,"verdict":"deepfake"|"ai_generated"|"harmful"|"safe","confidence":0-100,"summary":str,"findings":[{"category":"deepfake"|"ai_generated"|"harmful","label":str,"confidence":0-100,"description":str}]}
-Use verdict "safe" and an empty findings list when nothing is flagged.`;
+Use verdict "safe" and an empty findings list when nothing is flagged.
+For each visual finding, include "region":{"x":number,"y":number,"width":number,"height":number} in normalized image coordinates (0..1, origin top-left). Enclose only the suspicious face/object/area. Omit region for text-only or audio findings or when localization is uncertain. Do not invent coordinates.`;
 
 const MANUAL_SCAN_PROMPT = `You are Maalam, an AI safety analyst. The user submitted content to check: an image, a video, an audio clip or a piece of text.
 
@@ -41,6 +42,7 @@ Be calibrated: ordinary photos, recordings and messages are safe. Detection is h
 
 Reply with ONLY a JSON object, no markdown, no other text:
 {"flagged":bool,"verdict":"deepfake"|"ai_generated"|"harmful"|"safe","confidence":0-100,"summary":str,"findings":[{"category":"deepfake"|"ai_generated"|"harmful","label":str,"confidence":0-100,"description":str}]}
+For still images, include an optional "region":{"x":number,"y":number,"width":number,"height":number} on each visual finding, using normalized image coordinates (0..1, origin top-left). Omit regions if uncertain or for video, audio and text.
 "confidence" is how sure you are of the verdict, including when the verdict is "safe". Use an empty findings list when nothing is flagged. Keep "summary" to one or two plain sentences.`;
 
 export type Verdict = 'deepfake' | 'ai_generated' | 'harmful' | 'safe';
@@ -61,6 +63,15 @@ const clampConfidence = (v: unknown) =>
 const VALID_CATEGORIES = new Set(['deepfake', 'ai_generated', 'harmful']);
 const VALID_VERDICTS = new Set([...VALID_CATEGORIES, 'safe']);
 
+function parseRegion(value: unknown): DetectedRegion | undefined {
+  if (!value || typeof value !== 'object') return;
+  const { x, y, width, height } = value as Record<string, unknown>;
+  if (![x, y, width, height].every(v => typeof v === 'number' && Number.isFinite(v))) return;
+  const region = { x, y, width, height } as DetectedRegion;
+  if (region.x < 0 || region.y < 0 || region.width <= 0 || region.height <= 0 || region.x + region.width > 1 || region.y + region.height > 1) return;
+  return region;
+}
+
 /** Parse the first {...} block of model output (```json fences tolerated). */
 export function parseVerdict(text: string): ParsedVerdict | null {
   const cleaned = text.replace(/```(?:json)?/g, '');
@@ -77,7 +88,7 @@ export function parseVerdict(text: string): ParsedVerdict | null {
     ? (json.verdict as Verdict)
     : 'safe';
   const rawFindings = Array.isArray(json.findings) ? json.findings : [];
-  const findings: MonitorFinding[] = rawFindings
+  const findings: MonitorFinding[] = rawFindings.slice(0, 12)
     .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
     .map((f) => ({
       category: VALID_CATEGORIES.has(f.category as string)
@@ -85,6 +96,7 @@ export function parseVerdict(text: string): ParsedVerdict | null {
         : 'harmful',
       label: typeof f.label === 'string' && f.label.trim() ? f.label : 'Flagged content',
       confidence: clampConfidence(f.confidence),
+      region: parseRegion(f.region),
       description: typeof f.description === 'string' ? f.description : '',
     }))
     .filter((f) => f.confidence > 0);
@@ -111,16 +123,16 @@ async function providerOrNull(settings: Settings) {
 }
 
 /**
- * Analyse one frame. Returns a flagged verdict, or null when the frame is
- * clean, the result can't be parsed, or the provider can't run (no API key,
- * model not downloaded, cloud provider offline).
+ * Analyse one frame. Returns a flagged verdict or null when nothing meets
+ * the flagging threshold. Failed checks throw so the monitor can show an error.
  */
 export async function analyzeFrame(
   frame: MonitorFrame,
-  settings: Settings
+  settings: Settings,
+  signal?: AbortSignal,
 ): Promise<RawResult | null> {
   const provider = await providerOrNull(settings);
-  if (!provider) return null;
+  if (!provider) throw new Error('AI unavailable. Check your connection and Detector settings.');
   const conversationId = `monitor-${frame.frameId}`;
   const message: ChatMessage = {
     role: 'user',
@@ -134,13 +146,13 @@ export async function analyzeFrame(
     const output = await provider.generate([message], {
       systemPrompt: DETECTION_SYSTEM_PROMPT,
       conversationId,
+      signal,
       onToken: () => {},
     });
     const parsed = parseVerdict(output);
-    if (!parsed || !parsed.flagged || parsed.confidence < 60) return null;
+    if (!parsed) throw new Error('The screen check returned an unreadable answer.');
+    if (!parsed.flagged || parsed.confidence < 60) return null;
     return parsed as RawResult;
-  } catch {
-    return null;
   } finally {
     if (provider.id === 'local') {
       await releaseLocalConversation(conversationId).catch(() => {});
