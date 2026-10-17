@@ -16,6 +16,7 @@ export function useMonitorSync() {
       packages: apps.map((a) => a.packageName),
       labels: Object.fromEntries(apps.map((a) => [a.packageName, a.label])),
       minIntervalMs: settings.provider === 'local' ? 15000 : 8000,
+      darkTheme: settings.theme === 'dark',
     });
   }, [
     ready,
@@ -23,5 +24,6 @@ export function useMonitorSync() {
     settings.monitoringEnabled,
     settings.monitoredApps,
     settings.provider,
+    settings.theme,
   ]);
 }

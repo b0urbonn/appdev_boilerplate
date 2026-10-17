@@ -513,18 +513,16 @@ export default function HomeScreen() {
           </SmoothPressable>
         </Animated.View>
 
-        {Platform.OS === 'web' && (
-          <SmoothPressable
-            accessibilityRole="link"
-            accessibilityLabel="Preview monitor overlay"
-            onPress={() => router.push('/monitor-preview' as Href)}
-            style={styles.previewLink}
-          >
-            <Text style={{ color: theme.tint, fontSize: 14, fontWeight: '600' }}>
-              Preview monitor overlay
-            </Text>
-          </SmoothPressable>
-        )}
+        <SmoothPressable
+          accessibilityRole="link"
+          accessibilityLabel="Preview monitor overlay"
+          onPress={() => router.push('/monitor-preview' as Href)}
+          style={styles.previewLink}
+        >
+          <Text style={{ color: theme.tint, fontSize: 14, fontWeight: '600' }}>
+            Preview monitor overlay
+          </Text>
+        </SmoothPressable>
       </View>
       <StreakDetailsModal
         visible={streakModalOpen}

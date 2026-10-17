@@ -24,7 +24,7 @@ See **[docs/README.md](docs/README.md)** for the documentation index.
 
 Grab the installable APK from
 [Releases](https://github.com/b0urbonn/Maalam-Project/releases) —
-`maalam-1.0.2-release.apk` (v1.0.2, debug-signed, ARM devices).
+`maalam-1.0.3-release.apk` (v1.0.3, debug-signed, ARM devices).
 
 ## Quick start
 

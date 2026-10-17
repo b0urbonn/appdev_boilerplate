@@ -11,9 +11,11 @@ What it does:
 - **Verdict reports** — every scan ends with a risk score, a verdict, and a
   shareable full report (`src/app/scans/[id].tsx`).
 - **Protection monitoring** — pick apps to watch
-  (`src/app/protected-apps.tsx`); a native foreground service
-  (`modules/app-monitor/`) captures frames and analyzes them via a headless
-  task (`index.js` → `src/detection/task.ts`), then raises alerts
+  (`src/app/protected-apps.tsx`); a native accessibility overlay
+  (`modules/app-monitor/`) shows a state-colored floating bubble, auto-scans
+  in Live mode, and offers a Manual-mode tools popup (chat thread, link
+  detection, screenshot attach, verdict cards) via a headless task
+  (`index.js` → `src/detection/task.ts`), then raises alerts
   (`src/app/alerts.tsx`).
 - **Learn** — offline lessons on spotting manipulated media
   (`src/learn/lessons.ts`, `src/app/(tabs)/learn.tsx`).
@@ -137,7 +139,7 @@ src/app/detections/[id].tsx    Detection detail
 src/app/apps/[packageName].tsx Per-app detection log
 src/app/alerts.tsx             Monitoring alerts inbox
 src/app/protected-apps.tsx     Choose which apps the monitor watches
-src/app/monitor-preview.tsx    Monitor status/preview
+src/app/monitor-preview.tsx    Interactive simulation of the monitor tools overlay
 src/app/privacy.tsx            Privacy screen
 src/app/terms.tsx              Terms screen
 src/app/settings.tsx           System settings (gear on Home): nickname, light/dark
@@ -217,7 +219,9 @@ Sending a message:
 The app has one assistant chat (conversation id `main`); "Clear chat" in
 Detector settings deletes its messages. Scans and monitor detections are
 persisted separately in `src/db/scans.ts` / `src/db/detections.ts` and
-browsed from the **History** tab.
+browsed from the **History** tab — the timeline shows the ten most recent
+items and expands to a complete per-day view (activity counts per day plus
+the day-grouped list) via "See complete history".
 
 ### Adding a new AI provider
 

@@ -157,6 +157,7 @@ class AppMonitorModule : Module() {
         .putString("labels", org.json.JSONObject(labelMap).toString())
         .putLong("minIntervalMs",
           (config["minIntervalMs"] as? Number)?.toLong() ?: 8000L)
+        .putBoolean("darkTheme", config["darkTheme"] as? Boolean ?: false)
         .apply()
     }
 

@@ -21,7 +21,6 @@ export default async function maalamScanTask(data: MonitorFrame & { mode?: strin
     try {
       const settings = await loadSettings();
       if (!settings.onboarded) throw new Error('Complete setup in Maalam first.');
-      if (settings.appLockEnabled) throw new Error('Open and unlock Maalam to chat while app lock is enabled.');
       const raw: unknown = JSON.parse(data.history || '[]');
       const history: ChatMessage[] = Array.isArray(raw) ? raw.filter((m): m is ChatMessage =>
         m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-6) : [];

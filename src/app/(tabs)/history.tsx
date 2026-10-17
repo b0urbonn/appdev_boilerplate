@@ -14,6 +14,7 @@ import {
   historyWeekStarts,
   localDayStart,
   mergeHistoryItems,
+  nextLocalDay,
   type HistoryDay,
   type HistoryFilter,
 } from '@/history/data';
@@ -26,6 +27,9 @@ import { typography } from '@/typography';
 const FILTERS: { id: HistoryFilter; label: string }[] = [
   { id: 'all', label: 'All' }, { id: 'alerts', label: 'Alerts' }, { id: 'scans', label: 'Scans' },
 ];
+
+/** Recent items shown on the timeline before the "See all" expansion. */
+const RECENT_LIMIT = 10;
 
 /** Local saved records are loaded independently of optional Android usage access. */
 export default function HistoryScreen() {
@@ -114,6 +118,18 @@ export default function HistoryScreen() {
     [detections, scans, today]
   );
   const items = filterHistory(allItems, filter);
+  const [showAll, setShowAll] = useState(false);
+  const recentItems = items.slice(0, RECENT_LIMIT);
+  const hasMore = items.length > RECENT_LIMIT;
+  const hiddenCount = items.length - RECENT_LIMIT;
+  const dayCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const item of items) {
+      const day = localDayStart(item.at);
+      counts.set(day, (counts.get(day) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[0] - a[0]);
+  }, [items]);
   const refresh = () => { void refreshRef.current?.(); };
 
   return <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -132,7 +148,7 @@ export default function HistoryScreen() {
         </SmoothPressable>
       </View>
       <View accessibilityRole="toolbar" accessibilityLabel="Filter history" style={styles.filters}>
-        {FILTERS.map(option => <SmoothPressable key={option.id} hitSlop={0} accessibilityLabel={`${option.label} filter`} accessibilityState={{ selected: filter === option.id }} onPress={() => setFilter(option.id)} style={[styles.chip, { backgroundColor: filter === option.id ? theme.buttonPrimary : theme.buttonSecondary }]}>
+        {FILTERS.map(option => <SmoothPressable key={option.id} hitSlop={0} accessibilityLabel={`${option.label} filter`} accessibilityState={{ selected: filter === option.id }} onPress={() => { setFilter(option.id); setShowAll(false); }} style={[styles.chip, { backgroundColor: filter === option.id ? theme.buttonPrimary : theme.buttonSecondary }]}>
           <Text style={[typography.chip, { color: filter === option.id ? '#FFFFFF' : theme.textSecondary }]}>{option.label}</Text>
         </SmoothPressable>)}
       </View>
@@ -140,8 +156,53 @@ export default function HistoryScreen() {
       <CoverageRings day={coverage} loading={!loaded || !!error || !available.alerts || !available.scans} reference={{ screenMinutes: Math.max(120, coverage.screenMinutes ?? 0), alerts: Math.max(5, coverage.alerts), scans: Math.max(8, coverage.scans) }} />
 
       {!!error && <View style={[styles.error, { backgroundColor: theme.card, borderColor: theme.border }]}><Ionicons name="information-circle-outline" size={20} color={theme.textSecondary} /><Text accessibilityRole="alert" style={[typography.caption, styles.flex, { color: theme.textSecondary }]}>{error}</Text><Button label="Retry" variant="secondary" onPress={refresh} /></View>}
-      <View style={styles.timelineHeading}><Text accessibilityRole="header" style={[typography.sectionTitle, { color: theme.text }]}>Timeline</Text><Text style={[typography.caption, { color: theme.textSecondary }]}>{items.length} {items.length === 1 ? 'item' : 'items'}</Text></View>
-      <TimelineList items={items} selectionKey={`overall-${filter}`} loading={loading && !loaded} failed={!!error} groupByDay />
+      <View style={styles.timelineHeading}><Text accessibilityRole="header" style={[typography.sectionTitle, { color: theme.text }]}>Timeline</Text><Text style={[typography.caption, { color: theme.textSecondary }]}>{showAll ? `${items.length} ${items.length === 1 ? 'item' : 'items'}` : `Recent ${recentItems.length} of ${items.length}`}</Text></View>
+      {showAll && dayCounts.length > 0 && (
+        <View style={[styles.daySummary, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.daySummaryHeader}>
+            <Ionicons name="calendar-outline" size={14} color={theme.textSecondary} />
+            <Text accessibilityRole="header" style={[typography.caption, styles.daySummaryTitle, { color: theme.textSecondary }]}>Activity by day</Text>
+          </View>
+          <View style={styles.dayCells}>
+            {dayCounts.map(([day, count]) => {
+              const date = new Date(day);
+              const currentYear = date.getFullYear() === new Date().getFullYear();
+              const sameMonth = currentYear && date.getMonth() === new Date().getMonth();
+              const dayName = day === today ? 'Today' : day === nextLocalDay(today, -1) ? 'Yesterday' : date.toLocaleDateString(undefined, { weekday: 'short' });
+              return <View key={day} style={[styles.dayCell, { backgroundColor: theme.buttonSecondary }]}>
+                <Text style={[styles.dayCellName, { color: theme.textSecondary }]} numberOfLines={1}>{dayName}</Text>
+                <Text style={[styles.dayCellDate, { color: theme.text }]}>{sameMonth ? `${date.getDate()}` : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
+                <Text style={[styles.dayCellCount, { color: theme.tint }]}>{count} {count === 1 ? 'item' : 'items'}</Text>
+              </View>;
+            })}
+          </View>
+        </View>
+      )}
+      <TimelineList items={showAll ? items : recentItems} selectionKey={`overall-${filter}-${showAll}`} loading={loading && !loaded} failed={!!error} groupByDay />
+      {hasMore && !showAll && (
+        <SmoothPressable
+          accessibilityRole="button"
+          accessibilityLabel={`See complete history, ${hiddenCount} more items grouped by day`}
+          onPress={() => setShowAll(true)}
+          style={[styles.seeAll, { backgroundColor: theme.card, borderColor: theme.border }]}
+        >
+          <Ionicons name="calendar-outline" size={16} color={theme.tint} />
+          <Text style={[typography.label, styles.flex, { color: theme.tint }]}>See complete history</Text>
+          <Text style={[typography.caption, { color: theme.textSecondary }]}>+{hiddenCount} more</Text>
+          <Ionicons name="chevron-down" size={16} color={theme.tint} />
+        </SmoothPressable>
+      )}
+      {hasMore && showAll && (
+        <SmoothPressable
+          accessibilityRole="button"
+          accessibilityLabel="Show only recent items"
+          onPress={() => setShowAll(false)}
+          style={[styles.seeAll, { backgroundColor: theme.card, borderColor: theme.border }]}
+        >
+          <Text style={[typography.label, styles.flex, { color: theme.tint }]}>Show recent only</Text>
+          <Ionicons name="chevron-up" size={16} color={theme.tint} />
+        </SmoothPressable>
+      )}
     </ScrollView>
     <StreakDetailsModal
       visible={streakModalOpen}
@@ -167,5 +228,14 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   chip: { minHeight: 40, paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
   timelineHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 },
+  seeAll: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  daySummary: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, padding: 12, marginBottom: 12 },
+  daySummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  daySummaryTitle: { fontWeight: '600' },
+  dayCells: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dayCell: { minWidth: 76, alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12 },
+  dayCellName: { fontSize: 11, fontWeight: '600' },
+  dayCellDate: { fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  dayCellCount: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
   error: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, marginBottom: 16 },
 });

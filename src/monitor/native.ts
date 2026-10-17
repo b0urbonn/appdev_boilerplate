@@ -40,6 +40,8 @@ export interface MonitorConfig {
   packages: string[];
   labels: Record<string, string>;
   minIntervalMs: number;
+  /** Overlay tools popup follows the app theme (dark cards vs light cards). */
+  darkTheme: boolean;
 }
 
 interface AppMonitorModule {

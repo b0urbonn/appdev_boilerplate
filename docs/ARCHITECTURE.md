@@ -104,9 +104,29 @@ detection prompt — and reports the verdict back to the service with
 `documentDirectory/detections/` and stored in the `detections` SQLite table
 (`src/db/detections.ts`); clean frames are deleted.
 
-The bubble turns red and a top alert bar appears on a detection. Tapping opens
-an in-app popup; "View in Maalam" deep-links to `maalam://detections/<id>`,
-which resolves to `src/app/detections/[id].tsx`. The home screen shows the
-protection status, a protected-apps launcher and recent detections;
-`src/app/protected-apps.tsx` edits the monitored list. Settings sync to the
-service via `useMonitorSync` (`src/monitor/useMonitorSync.ts`).
+The floating bubble's ring color reflects monitor state: green while live
+monitoring is idle, purple while a capture/scan is in flight, red when a
+frame is flagged, and orange in Manual mode.
+
+Tapping the bubble opens the monitor tools popup — a themed card that follows
+the app's light/dark setting (`darkTheme` in `MonitorConfig`, synced through
+`useMonitorSync`). The header is an icon chain — monitored app icon, an
+animated link connector, the Maalam icon with a state dot — flanked by an
+"open Maalam" shortcut (launches the app) and a close button. Below it, a
+single oblong toggle animates between **Live Mode** (auto screen scans only)
+and **Manual Mode** (on-demand inspection).
+
+Manual mode offers a chat thread: user bubbles (with attached-image
+previews), assistant replies, status messages, and inline verdict cards.
+A "+" button in the composer reveals the tools — Attach (screenshot/image
+picker), Detect link (reads a URL off the foreground screen), and Paste
+link. Submissions run the same `MaalamScanTaskService` pipeline; the verdict
+appears as an in-thread card with **View result** (full report popup) and
+**Open app** (`maalam://detections/<id>` → `src/app/detections/[id].tsx`).
+
+`src/app/monitor-preview.tsx` is an in-app simulation of this overlay used
+for design iteration; keep it visually in sync with `MaalamMonitorService`.
+The home screen shows the protection status, a protected-apps launcher and
+recent detections; `src/app/protected-apps.tsx` edits the monitored list.
+Settings sync to the service via `useMonitorSync`
+(`src/monitor/useMonitorSync.ts`).
