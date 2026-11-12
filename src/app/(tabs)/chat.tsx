@@ -11,7 +11,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +25,8 @@ import { Banner } from '@/components/Banner';
 import { ChatInput } from '@/components/ChatInput';
 import { ContextRing } from '@/components/ContextRing';
 import { IconButton } from '@/components/Button';
+import { FlowText as Text } from '@/components/FlowText';
+import { FlowTaskPage } from '@/components/FlowTaskUI';
 import { SmoothPressable } from '@/components/SmoothPressable';
 import { MessageBubble } from '@/components/MessageBubble';
 import {
@@ -34,6 +35,7 @@ import {
   touchConversation,
 } from '@/db/conversations';
 import {
+  deleteMessage,
   insertMessage,
   listMessages,
   setMessageStatus,
@@ -138,7 +140,11 @@ export default function ChatScreen() {
    */
   const runGeneration = useCallback(
     async (assistantRow: MessageRow, history: ChatMessage[]) => {
-      if (!provider) return;
+      if (!provider) {
+        setGenerating(false);
+        abortRef.current = null;
+        return;
+      }
       const controller = new AbortController();
       abortRef.current = controller;
       setGenerating(true);
@@ -153,46 +159,55 @@ export default function ChatScreen() {
         persistContent(assistantRow.id, snapshot);
       };
       try {
-        await provider.generate(history, {
-          systemPrompt: buildSystemPrompt(settings),
-          signal: controller.signal,
-          conversationId: id,
-          onContext: (usage) => setReported({ provider: provider.id, usage }),
-          onModel: (m) => setLastModel(m),
-          onReset: () => {
-            if (streamTimer) clearTimeout(streamTimer);
-            streamTimer = undefined;
-            content = '';
-            setMessages(prev => prev.map(m => m.id === assistantRow.id ? { ...m, content: '' } : m));
-            persistContent(assistantRow.id, '', true);
-          },
-          onToken: (t) => {
-            content += t;
-            if (!streamTimer) streamTimer = setTimeout(flushStream, 50);
-          },
-        });
-      } catch (e) {
-        if (streamTimer) clearTimeout(streamTimer);
-        if (!controller.signal.aborted) {
-          const errText =
-            e instanceof Error ? e.message : 'Generation failed.';
+        try {
+          await provider.generate(history, {
+            systemPrompt: buildSystemPrompt(settings),
+            signal: controller.signal,
+            conversationId: id,
+            onContext: (usage) => setReported({ provider: provider.id, usage }),
+            onModel: (m) => setLastModel(m),
+            onReset: () => {
+              if (streamTimer) clearTimeout(streamTimer);
+              streamTimer = undefined;
+              content = '';
+              setMessages(prev => prev.map(m => m.id === assistantRow.id ? { ...m, content: '' } : m));
+              persistContent(assistantRow.id, '', true);
+            },
+            onToken: (t) => {
+              content += t;
+              if (!streamTimer) streamTimer = setTimeout(flushStream, 50);
+            },
+          });
+        } catch (e) {
+          if (!controller.signal.aborted) {
+            const errText =
+              e instanceof Error ? e.message : 'Generation failed.';
+            await setMessageStatus(assistantRow.id, 'error', errText);
+            updateRow({ ...assistantRow, content, status: 'error', error: errText });
+            return;
+          }
+          // Aborted mid-flight: fall through and keep the partial content.
+        }
+
+        if (!content.trim()) {
+          const errText = controller.signal.aborted
+            ? 'Response stopped before the assistant replied.'
+            : 'The assistant returned an empty reply. Please retry.';
           await setMessageStatus(assistantRow.id, 'error', errText);
           updateRow({ ...assistantRow, content, status: 'error', error: errText });
-          setGenerating(false);
-          abortRef.current = null;
           return;
         }
-        // Aborted mid-flight: fall through and keep the partial content.
-      }
 
-      if (streamTimer) clearTimeout(streamTimer);
-      persistContent(assistantRow.id, content, true);
-      await setMessageStatus(assistantRow.id, 'done');
-      await updateMessageContent(assistantRow.id, content);
-      updateRow({ ...assistantRow, content, status: 'done', error: null });
-      await touchConversation(id);
-      setGenerating(false);
-      abortRef.current = null;
+        persistContent(assistantRow.id, content, true);
+        await setMessageStatus(assistantRow.id, 'done');
+        await updateMessageContent(assistantRow.id, content);
+        updateRow({ ...assistantRow, content, status: 'done', error: null });
+        await touchConversation(id);
+      } finally {
+        if (streamTimer) clearTimeout(streamTimer);
+        setGenerating(false);
+        if (abortRef.current === controller) abortRef.current = null;
+      }
     },
     [provider, settings, persistContent, updateRow]
   );
@@ -240,7 +255,14 @@ export default function ChatScreen() {
     const text = input.trim();
     const image = pendingImage;
     const audio = pendingAudio;
-    if ((!text && !image && !audio) || !provider || generating) return;
+    if ((!text && !image && !audio) || generating) return;
+    if (!provider) {
+      showMessage(
+        'Assistant is unavailable',
+        'Finish loading the local model or add your Gemini API key in Chat settings.'
+      );
+      return;
+    }
     setGenerating(true);
     await ensureConversation(id);
 
@@ -297,6 +319,13 @@ export default function ChatScreen() {
   const retry = useCallback(
     async (row: MessageRow) => {
       if (generating) return;
+      if (!provider) {
+        showMessage(
+          'Assistant is unavailable',
+          'Finish loading the local model or add your Gemini API key in Chat settings.'
+        );
+        return;
+      }
       const idx = messages.findIndex((m) => m.id === row.id);
       if (idx < 0) return;
       const history: ChatMessage[] = messages
@@ -317,7 +346,7 @@ export default function ChatScreen() {
       updateRow(pendingRow);
       await runGeneration(pendingRow, history);
     },
-    [generating, messages, runGeneration, updateRow]
+    [generating, messages, provider, runGeneration, updateRow]
   );
 
   const stop = useCallback(() => {
@@ -336,6 +365,21 @@ export default function ChatScreen() {
       setReported(null);
     });
   }, []);
+
+  const deleteAssistantMessage = useCallback((row: MessageRow) => {
+    if (row.role !== 'assistant' || row.status === 'pending' || generating) return;
+    confirmAction(
+      'Delete assistant message?',
+      'This reply will be removed from the chat.',
+      'Delete',
+      async () => {
+        await deleteMessage(row.id);
+        await releaseLocalConversation(id);
+        setMessages((prev) => prev.filter((message) => message.id !== row.id));
+        setReported(null);
+      }
+    );
+  }, [generating]);
 
   const openSettings = () => router.push('/chat-settings' as Href);
 
@@ -392,11 +436,11 @@ export default function ChatScreen() {
   }
 
   return (
+    <FlowTaskPage onProfilePress={() => router.navigate('/preferences' as Href)}>
     <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.top} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <IconButton icon="chevron-back" label="Back to Home" onPress={() => router.navigate('/' as Href)} />
         <View style={styles.flex}>
-          <Text style={[styles.title, { color: theme.text }]}>AI Chat</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Assistant</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 12 }}>
@@ -418,8 +462,13 @@ export default function ChatScreen() {
             Hi {settings.nickname || 'there'}, how can I help?
           </Text>
           <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
-            Ask anything. Your chat is saved on this device.
+            A calmer day starts with a conversation.
           </Text>
+          <SmoothPressable onPress={() => setInput(`Help me plan my day${settings.nickname ? `, ${settings.nickname}` : ''}.`)} style={[styles.planButton, { backgroundColor: theme.buttonPrimary }]}>
+            <Ionicons name="sparkles-outline" size={18} color={theme.text} />
+            <Text style={{ color: theme.text, fontSize: 13, fontWeight: '800' }}>Let’s plan my day</Text>
+            <Ionicons name="arrow-forward" size={16} color={theme.text} />
+          </SmoothPressable>
           <View style={styles.chips}>
             {SUGGESTIONS.map((s) => (
               <SmoothPressable
@@ -453,6 +502,8 @@ export default function ChatScreen() {
               message={item}
               pendingLabel={pendingLabel}
               onRetry={item.role === 'assistant' ? retry : undefined}
+              onDelete={item.role === 'assistant' ? deleteAssistantMessage : undefined}
+              deleteDisabled={generating}
             />
           )}
         />
@@ -476,6 +527,7 @@ export default function ChatScreen() {
         onCancelRecording={cancelRecording}
       />
     </KeyboardAvoidingView>
+    </FlowTaskPage>
   );
 }
 
@@ -509,6 +561,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
   emptySub: { fontSize: 14, marginTop: 6, textAlign: 'center' },
+  planButton: { width: '100%', minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 13, marginTop: 20, marginBottom: 8 },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',

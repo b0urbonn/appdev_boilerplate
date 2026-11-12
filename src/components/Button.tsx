@@ -24,7 +24,7 @@ export function Button({
 }) {
   const theme = useTheme();
   const secondary = variant === 'secondary' || variant === 'destructiveSecondary';
-  const foreground = variant === 'destructiveSecondary' ? theme.danger : secondary ? theme.text : '#FFFFFF';
+  const foreground = variant === 'destructiveSecondary' ? theme.danger : variant === 'destructive' ? '#FFFFFF' : theme.text;
   const background = secondary ? theme.buttonSecondary : variant === 'destructive' ? theme.buttonDanger : theme.buttonPrimary;
   return (
     <SmoothPressable
@@ -52,7 +52,7 @@ export function IconButton({ icon, label, variant = 'secondary', loading = false
 }) {
   const theme = useTheme();
   const background = variant === 'primary' ? theme.buttonPrimary : variant === 'destructive' ? theme.buttonDanger : theme.buttonSecondary;
-  const foreground = variant === 'secondary' ? theme.text : '#FFFFFF';
+  const foreground = variant === 'destructive' ? '#FFFFFF' : theme.text;
   return (
     <SmoothPressable
       {...props}

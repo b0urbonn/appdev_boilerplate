@@ -16,11 +16,12 @@ An Android app built with **React Native + Expo** that already has:
 
 | Feature | Where |
 | --- | --- |
-| Onboarding slides + nickname setup (first launch only) | `src/app/onboarding.tsx` |
+| Onboarding slides + nickname setup (first launch; tap the header logo to replay) | `src/app/onboarding.tsx` |
 | Home screen with a greeting, AI status card and buttons | `src/app/(tabs)/index.tsx` |
 | Empty "Your feature" buttons for your own features | `ACTIONS` in `src/app/(tabs)/index.tsx` |
 | One AI chat screen (streaming replies, retry, stop) | `src/app/(tabs)/chat.tsx` |
 | Context ring that shows how much the AI still remembers | `src/components/ContextRing.tsx` |
+| FlowTask preferences (daily reminder time, tap sounds, replay tutorial) | `src/app/(tabs)/preferences.tsx` |
 | System settings (nickname, light/dark theme, backup/restore, about, reset all data) | `src/app/settings.tsx` |
 | Chatbot settings (AI provider, API key, model, local model, saved system prompt) | `src/app/chat-settings.tsx` |
 | Offline storage (SQLite database on the phone) | `src/db/` |

@@ -3,8 +3,10 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/manrope": "^0.4.3",
     "@expo/metro-runtime": "~57.0.16",
     "@expo/vector-icons": "^15.0.2",
+    "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-community/netinfo": "12.0.1",
     "expo": "~57.0.28",
     "expo-asset": "~57.0.19",
@@ -18,6 +20,7 @@
     "expo-font": "~57.0.4",
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
+    "expo-notifications": "~57.0.25",
     "expo-router": "~57.0.26",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.23",
@@ -33,18 +36,28 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "^0.21.2",
+    "three": "^0.186.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
-    "typescript": "~6.0.3"
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.5"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit -p tsconfig.web.json && vite build",
+    "preview": "vite preview --host 0.0.0.0"
   },
   "private": true
 }

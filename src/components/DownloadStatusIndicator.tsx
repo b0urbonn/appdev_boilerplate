@@ -76,7 +76,7 @@ export function DownloadStatusIndicator() {
 
   const isDownloading = status.state === 'downloading';
   const progress = statusProgress;
-  const isTabScreen = pathname === '/';
+  const isTabScreen = ['/', '/calendar', '/weekly', '/chat', '/preferences'].includes(pathname);
   const bottom =
     insets.bottom +
     (isTabScreen ? TAB_BAR_GAP * 2 + TAB_BAR_HEIGHT + 12 : 12) +

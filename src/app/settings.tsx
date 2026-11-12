@@ -98,7 +98,6 @@ export default function SettingsScreen() {
         await reset();
       }
     );
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Offline AI Starter",
+    "name": "FlowTask",
     "slug": "offline-ai-starter",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -27,7 +27,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#F7F9F6",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
@@ -57,7 +57,9 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to record voice messages for the AI."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ],
     "web": {
       "bundler": "metro",

@@ -26,6 +26,7 @@ export const PRIVACY_POLICY: LegalDoc = {
       body: [
         'Your chat messages are saved in a local database on your phone. Images and voice messages you attach are stored in the app\'s private storage.',
         'Your settings (nickname, theme, AI provider, model choice and system prompt) are saved locally.',
+        'If you enable daily reminders, the reminder time is saved locally and Android schedules notifications on your device. Reminder content is not sent to a server.',
         'Your Gemini API key, if you enter one, is stored encrypted in Android secure storage.',
         'The local AI model file (about 2.6 GB) is saved in the app\'s private storage after you download it.',
         'This data stays on your device until you clear the chat, use "Reset all data", or uninstall the app.',

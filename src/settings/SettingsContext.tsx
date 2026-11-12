@@ -7,8 +7,10 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { getModelStatus, subscribeModelStatus } from '@/ai/local';
+import { setTapSoundEnabled } from '@/components/tapSound';
+import { cancelDailyTaskReminder } from '@/utils/dailyReminder';
 import { refreshLocalDeviceResources, scanLocalDevice, type LocalDeviceCheck, type LocalDeviceReport } from '@/ai/deviceCapabilities';
 import {
   DEFAULT_SETTINGS,
@@ -44,6 +46,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { setTapSoundEnabled(settings.soundEffects); }, [settings.soundEffects]);
   const [ready, setReady] = useState(false);
   const [localDevice, setLocalDevice] = useState<LocalDeviceCheck>({ state: 'idle' });
   const [deviceScan, setDeviceScan] = useState(0);
@@ -117,8 +120,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const update = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
       if (settingsRef.current[key] === value) return Promise.resolve();
-      if (key === 'systemPrompt') {
-        // Explicit Save applies the prompt only after it reaches storage.
+      if (key === 'systemPrompt' || key === 'onboarded') {
+        // Apply explicit saves and onboarding gate changes only after storage succeeds.
         return saveSetting(key, value).then(() => setSettings(prev => ({ ...prev, [key]: value })));
       }
       if (key === 'provider' && value === 'local') setLocalDevice(previous => previous.state === 'ready'
@@ -131,6 +134,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reset = useCallback(async () => {
+    if (Platform.OS === 'android') await cancelDailyTaskReminder();
     await resetSettings();
     setSettings(DEFAULT_SETTINGS);
     lastDeviceReport.current = null;

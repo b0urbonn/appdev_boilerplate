@@ -1,6 +1,7 @@
 import { BlurTargetView, BlurView } from 'expo-blur';
 import React, { createContext, useContext, useRef, useSyncExternalStore, type RefObject } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { TapPressable as Pressable } from '@/components/TapPressable';
 import { useSettings } from '@/settings/SettingsContext';
 import { useTheme } from '@/theme';
 import { dismissConfirmation, getConfirmation, showMessage, subscribeConfirmation } from '@/utils/confirm';

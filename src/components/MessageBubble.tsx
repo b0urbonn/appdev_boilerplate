@@ -14,9 +14,11 @@ interface Props {
   /** Label shown while a pending message has no content yet. */
   pendingLabel?: string;
   onRetry?: (message: MessageRow) => void;
+  onDelete?: (message: MessageRow) => void;
+  deleteDisabled?: boolean;
 }
 
-export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
+export function MessageBubble({ message, pendingLabel, onRetry, onDelete, deleteDisabled }: Props) {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const isUser = message.role === 'user';
@@ -138,12 +140,27 @@ export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
           )}
         </SmoothPressable>
         {message.status !== 'pending' && (
-          <Text style={[styles.time, { color: theme.textSecondary }]}>
-            {new Date(message.created_at).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </Text>
+          <View style={styles.footer}>
+            <Text style={[styles.time, { color: theme.textSecondary }]}>
+              {new Date(message.created_at).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+            {!isUser && onDelete && (
+              <SmoothPressable
+                accessibilityRole="button"
+                accessibilityLabel="Delete assistant message"
+                accessibilityState={{ disabled: deleteDisabled }}
+                disabled={deleteDisabled}
+                onPress={() => onDelete(message)}
+                style={[styles.deleteButton, { backgroundColor: theme.buttonDanger }, deleteDisabled && styles.deleteDisabled]}
+              >
+                <Ionicons name="trash-outline" size={14} color="#FFFFFF" />
+                <Text style={styles.deleteText}>Delete</Text>
+              </SmoothPressable>
+            )}
+          </View>
         )}
       </View>
     </Animated.View>
@@ -177,5 +194,9 @@ const styles = StyleSheet.create({
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   retry: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, borderRadius: 8, paddingHorizontal: 10, minHeight: 44, paddingVertical: 6 },
   errorText: { fontSize: 13, flexShrink: 1 },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginHorizontal: 4 },
   time: { fontSize: 11, marginTop: 4, marginHorizontal: 4 },
+  deleteButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 10 },
+  deleteDisabled: { opacity: 0.55 },
+  deleteText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 });

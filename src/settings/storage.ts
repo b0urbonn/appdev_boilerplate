@@ -1,6 +1,7 @@
 import Storage from 'expo-sqlite/kv-store';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import type { AppLanguage } from '@/i18n';
 
 export type ProviderId = 'cloud' | 'local';
 export type LocalBackend = 'auto' | 'npu' | 'gpu' | 'cpu';
@@ -13,13 +14,19 @@ const KEYS = {
   systemPrompt: 'systemPrompt',
   nickname: 'nickname',
   onboarded: 'onboarded',
+  dailyReminders: 'dailyReminders',
+  reminderTime: 'reminderTime',
+  soundEffects: 'soundEffects',
   theme: 'theme',
+  language: 'language',
   modelResumeData: 'modelResumeData',
 } as const;
 
 const API_KEY_KEY = 'gemini_api_key';
 
 export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful assistant.';
+const RESPONSE_REQUIREMENT =
+  'Always respond to every user message. Address each question and requested item. If something is unclear, answer what you can and ask a focused clarifying question. If you do not know, say so; never silently omit a question or return an empty response.';
 /** 'auto' = pick the best model the API key can use (see pickBestModel). */
 export const DEFAULT_GEMINI_MODEL = 'auto';
 
@@ -31,7 +38,11 @@ export interface Settings {
   systemPrompt: string;
   nickname: string;
   onboarded: boolean;
+  dailyReminders: boolean;
+  reminderTime: string;
+  soundEffects: boolean;
   theme: ThemeMode;
+  language: AppLanguage;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,11 +53,15 @@ export const DEFAULT_SETTINGS: Settings = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   nickname: '',
   onboarded: false,
+  dailyReminders: false,
+  reminderTime: '09:00',
+  soundEffects: true,
   theme: 'light',
+  language: 'en',
 };
 
 export async function loadSettings(): Promise<Settings> {
-  const [provider, geminiModel, localBackend, systemPrompt, nickname, onboarded, theme, apiKey] =
+  const [provider, geminiModel, localBackend, systemPrompt, nickname, onboarded, dailyReminders, reminderTime, soundEffects, theme, language, apiKey] =
     await Promise.all([
       Storage.getItem(KEYS.provider),
       Storage.getItem(KEYS.geminiModel),
@@ -54,7 +69,11 @@ export async function loadSettings(): Promise<Settings> {
       Storage.getItem(KEYS.systemPrompt),
       Storage.getItem(KEYS.nickname),
       Storage.getItem(KEYS.onboarded),
+      Storage.getItem(KEYS.dailyReminders),
+      Storage.getItem(KEYS.reminderTime),
+      Storage.getItem(KEYS.soundEffects),
       Storage.getItem(KEYS.theme),
+      Storage.getItem(KEYS.language),
       Platform.OS === 'web'
         ? Promise.resolve(typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(API_KEY_KEY))
         : SecureStore.getItemAsync(API_KEY_KEY),
@@ -70,7 +89,11 @@ export async function loadSettings(): Promise<Settings> {
     systemPrompt: systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
     nickname: nickname ?? '',
     onboarded: onboarded === 'true',
+    dailyReminders: dailyReminders === 'true',
+    reminderTime: reminderTime ?? '09:00',
+    soundEffects: soundEffects !== 'false',
     theme: theme === 'dark' ? 'dark' : 'light',
+    language: language === 'tl' ? 'tl' : 'en',
   };
 }
 
@@ -104,8 +127,16 @@ export async function saveSetting<K extends keyof Settings>(
       return Storage.setItemAsync(KEYS.nickname, value as string);
     case 'onboarded':
       return Storage.setItemAsync(KEYS.onboarded, String(value));
+    case 'dailyReminders':
+      return Storage.setItemAsync(KEYS.dailyReminders, String(value));
+    case 'reminderTime':
+      return Storage.setItemAsync(KEYS.reminderTime, value as string);
+    case 'soundEffects':
+      return Storage.setItemAsync(KEYS.soundEffects, String(value));
     case 'theme':
       return Storage.setItemAsync(KEYS.theme, value as string);
+    case 'language':
+      return Storage.setItemAsync(KEYS.language, value as AppLanguage);
   }
 }
 
@@ -119,9 +150,14 @@ export async function resetSettings(): Promise<void> {
 /** System prompt sent to the AI, personalised with the user's nickname. */
 export function buildSystemPrompt(settings: Settings): string {
   const name = settings.nickname.trim();
-  return name
-    ? `${settings.systemPrompt}\nThe user's name is ${name}.`.trim()
-    : settings.systemPrompt;
+  return [
+    settings.systemPrompt,
+    name ? `The user's name is ${name}.` : '',
+    RESPONSE_REQUIREMENT,
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
 }
 
 export async function getModelResumeData(): Promise<string | null> {
