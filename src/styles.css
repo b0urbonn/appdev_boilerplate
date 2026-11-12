@@ -126,6 +126,7 @@ button:disabled { cursor: not-allowed; }
 .eyebrow { margin: 0 0 7px; color: var(--mint-strong); font-size: 9px; font-weight: 800; letter-spacing: 1.25px; text-transform: uppercase; }
 h1, h2, h3, p { margin-top: 0; }
 .page-heading h1 { margin: 0; font-size: clamp(24px, 7vw, 29px); line-height: 1.18; letter-spacing: -1.15px; font-weight: 800; }
+.tasks-screen .page-heading h1 { font-size: clamp(24px, 6.5vw, 27px); }
 .page-heading h1 .wave { display: inline-block; vertical-align: 1px; color: var(--mint-strong); }
 .subheading { margin: 7px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .add-button { flex: 0 0 auto; justify-content: center; gap: 5px; min-height: 36px; padding: 0 11px; border: 0; border-radius: 11px; color: oklch(0.25 0.07 160); background: var(--mint); font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 11px oklch(0.55 0.13 160 / 0.15); transition: transform 180ms ease, box-shadow 180ms ease; }
