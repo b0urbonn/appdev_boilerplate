@@ -1,0 +1,21 @@
+{
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "SKIP_IOS_FRAMEWORK_DOWNLOAD": "1" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "SKIP_IOS_FRAMEWORK_DOWNLOAD": "1" }
+    },
+    "production": {
+      "env": { "SKIP_IOS_FRAMEWORK_DOWNLOAD": "1" }
+    }
+  }
+}

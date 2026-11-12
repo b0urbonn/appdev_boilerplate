@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "FlowTask",
+    "slug": "offline-ai-starter",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "offline-ai-starter",
+    "userInterfaceStyle": "automatic",
+    "platforms": [
+      "android",
+      "web"
+    ],
+    "android": {
+      "package": "com.example.offlineaistarter",
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F7F9F6",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": false
+        }
+      ],
+      "react-native-litert-lm",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "expo-font",
+      "expo-sharing",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to record voice messages for the AI."
+        }
+      ],
+      "expo-asset",
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}

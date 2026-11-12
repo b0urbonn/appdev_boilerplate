@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(local_ai_device)
+add_library(local_ai_device SHARED DeviceProbe.cpp)
+target_compile_features(local_ai_device PRIVATE cxx_std_17)
+target_link_libraries(local_ai_device dl)
